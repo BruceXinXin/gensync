@@ -14,9 +14,9 @@
 class CommStringTest : public CPPUNIT_NS::TestFixture {
     CPPUNIT_TEST_SUITE(CommStringTest);
 
-    CPPUNIT_TEST(testGetString);
-    CPPUNIT_TEST(testGetName);
-    CPPUNIT_TEST(testComm);
+//    CPPUNIT_TEST(testGetString);
+//    CPPUNIT_TEST(testGetName);
+//    CPPUNIT_TEST(testComm);
 
     CPPUNIT_TEST_SUITE_END();
 

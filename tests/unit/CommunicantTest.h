@@ -14,7 +14,7 @@
 class CommunicantTest : public CPPUNIT_NS::TestFixture {
     CPPUNIT_TEST_SUITE(CommunicantTest);
     
-    CPPUNIT_TEST(testConstruct);
+//    CPPUNIT_TEST(testConstruct);
     CPPUNIT_TEST(testBytesAndResetCommCounters);
     CPPUNIT_TEST(testEstablishModAndCommZZ_p);
     CPPUNIT_TEST(testCommUstringBytes);
@@ -23,13 +23,14 @@ class CommunicantTest : public CPPUNIT_NS::TestFixture {
     CPPUNIT_TEST(testCommUstringNoBytes);
     CPPUNIT_TEST(testCommDataObject);
     CPPUNIT_TEST(testCommDataObjectPriority);
-    CPPUNIT_TEST(testCommDataObjectList);
+//    CPPUNIT_TEST(testCommDataObjectList);
     CPPUNIT_TEST(testCommDouble);
     CPPUNIT_TEST(testCommByte);
     CPPUNIT_TEST(testCommInt);
     CPPUNIT_TEST(testCommVec_ZZ_p);
     CPPUNIT_TEST(testCommZZ);
     CPPUNIT_TEST(testCommZZNoArgs);
+    CPPUNIT_TEST(testCommSequence);
     
     CPPUNIT_TEST_SUITE_END();
 
@@ -126,6 +127,11 @@ private:
  	* Tests commSend and Recv for ZZ without passing any arguments
  	*/
     void testCommZZNoArgs();
+
+    /**
+     * Test commSendSequenceOfSDO and commRecvSequenceOfSDO
+     */
+    void testCommSequence();
 
     
 

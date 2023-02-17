@@ -26,7 +26,6 @@ void FullSyncTest::tearDown() {
 }
 
 void FullSyncTest::FullSyncSetReconcileTest() {
-
 	GenSync GenSyncServer = GenSync::Builder().
 			setProtocol(GenSync::SyncProtocol::FullSync).
 			setComm(GenSync::SyncComm::socket).

@@ -12,7 +12,7 @@
 #include <vector>
 #include <algorithm>
 #include <CPISync/Benchmarks/BenchParams.h>
-#include <CPISync/Aux/SyncMethod.h>
+#include <CPISync/Aux_/SyncMethod.h>
 
 using namespace std;
 

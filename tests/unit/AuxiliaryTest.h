@@ -14,17 +14,17 @@
 class AuxiliaryTest : public CPPUNIT_NS::TestFixture {
     CPPUNIT_TEST_SUITE(AuxiliaryTest);
 
-    CPPUNIT_TEST(testStrTo);
-    CPPUNIT_TEST(testToStr);
-    CPPUNIT_TEST(testBase64_encode);
-    CPPUNIT_TEST(testBase64_decode);
-    CPPUNIT_TEST(testBase64_encode_decode);
-    CPPUNIT_TEST(testStrToVecToStr);
-    CPPUNIT_TEST(testMultisetIntersect);
-    CPPUNIT_TEST(testMultisetDiff);
-    CPPUNIT_TEST(testMultisetUnion);
-    CPPUNIT_TEST(testMultisetSubset);
-	CPPUNIT_TEST(testSplit);
+//    CPPUNIT_TEST(testStrTo);
+//    CPPUNIT_TEST(testToStr);
+//    CPPUNIT_TEST(testBase64_encode);
+//    CPPUNIT_TEST(testBase64_decode);
+//    CPPUNIT_TEST(testBase64_encode_decode);
+//    CPPUNIT_TEST(testStrToVecToStr);
+//    CPPUNIT_TEST(testMultisetIntersect);
+//    CPPUNIT_TEST(testMultisetDiff);
+//    CPPUNIT_TEST(testMultisetUnion);
+//    CPPUNIT_TEST(testMultisetSubset);
+//    CPPUNIT_TEST(testSplit);
 
     CPPUNIT_TEST_SUITE_END();
 

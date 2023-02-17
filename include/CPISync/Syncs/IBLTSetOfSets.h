@@ -16,8 +16,8 @@
 #ifndef CPISYNCLIB_IBLTSetOfSets_H
 #define CPISYNCLIB_IBLTSetOfSets_H
 
-#include <CPISync/Aux/SyncMethod.h>
-#include <CPISync/Aux/Auxiliary.h>
+#include <CPISync/Aux_/SyncMethod.h>
+#include <CPISync/Aux_/Auxiliary.h>
 #include <CPISync/Syncs/IBLT.h>
 #include <NTL/ZZ.h>
 

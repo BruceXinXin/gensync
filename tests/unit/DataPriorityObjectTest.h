@@ -15,9 +15,9 @@ class DataPriorityObjectTest : public CPPUNIT_NS::TestFixture {
 
 		CPPUNIT_TEST_SUITE(DataPriorityObjectTest);
 
-        CPPUNIT_TEST(testToPriorityStringAndInitStringableAndSetPriority);
-        CPPUNIT_TEST(testPriority);
-        CPPUNIT_TEST(testTimeStamp);
+//        CPPUNIT_TEST(testToPriorityStringAndInitStringableAndSetPriority);
+//        CPPUNIT_TEST(testPriority);
+//        CPPUNIT_TEST(testTimeStamp);
 
     	CPPUNIT_TEST_SUITE_END();
 

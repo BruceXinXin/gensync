@@ -1,6 +1,6 @@
 # General Use
 
-  - *Include Statements:* `#include <CPISync/(Aux/Data/Communicants/Syncs)/(The module you want to use).h>`
+  - *Include Statements:* `#include <CPISync/(Aux_/Data/Communicants/Syncs)/(The module you want to use).h>`
 
   1. Initialize a `GenSync` object with the constructor or builder helper class on the client and server machine
           

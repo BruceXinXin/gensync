@@ -10,8 +10,8 @@
 #include <vector>
 #include <getopt.h>
 
-#include <CPISync/Aux/Auxiliary.h>
-#include <CPISync/Aux/SyncMethod.h>
+#include <CPISync/Aux_/Auxiliary.h>
+#include <CPISync/Aux_/SyncMethod.h>
 #include <CPISync/Syncs/GenSync.h>
 #include <CPISync/Syncs/CPISync.h>
 #include <CPISync/Communicants/CommString.h>

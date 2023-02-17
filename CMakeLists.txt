@@ -19,7 +19,7 @@ set(CMAKE_CXX_FLAGS "-std=c++11 -DDEFAULT_LOGLEVEL=TEST")
 
 # Set project directory strucuture
 set(SRC_DIR src)
-set(AUX_DIR ${SRC_DIR}/Aux)
+set(AUX_DIR ${SRC_DIR}/Aux_)
 set(DATA_DIR ${SRC_DIR}/Data)
 set(COMM_DIR ${SRC_DIR}/Communicants)
 set(SYNC_DIR ${SRC_DIR}/Syncs)
@@ -27,7 +27,7 @@ set(BENCH_DIR ${SRC_DIR}/Benchmarks)
 set(TOOLS_DIR ${SRC_DIR}/Tools)
 
 set(INCLUDE include/CPISync)
-set(AUX_DIR_INC ${INCLUDE}/Aux)
+set(AUX_DIR_INC ${INCLUDE}/Aux_)
 set(DATA_DIR_INC ${INCLUDE}/Data)
 set(COMM_DIR_INC ${INCLUDE}/Communicants)
 set(SYNC_DIR_INC ${INCLUDE}/Syncs)
@@ -38,6 +38,7 @@ set(TEST_DIR tests)
 set(UNIT_TEST_DIR ${TEST_DIR}/unit)
 set(SYSLONG_TEST_DIR ${TEST_DIR}/sys/long)
 set(BENCHMARK_TEST_DIR ${TEST_DIR}/sys/benchmark)
+set(NORMAL_TEST_DIR ${TEST_DIR}/normal)
 
 # Set location of the test runner
 set(TEST_RUNNER ${TEST_DIR}/testRunner.cpp)
@@ -71,6 +72,9 @@ set(SOURCE_FILES
         ${SYNC_DIR}/Cuckoo.cpp
         ${SYNC_DIR}/CuckooSync.cpp
         ${SYNC_DIR}/FullSync.cpp
+        ${SYNC_DIR}/TrivialSync.cpp
+        ${SYNC_DIR}/RCDS.cpp
+        ${SYNC_DIR}/SetOfContent.cpp
 
         ${BENCH_DIR}/Runner.cpp
         ${BENCH_DIR}/BenchParams.cpp
@@ -90,6 +94,7 @@ set(HEADERS
         ${AUX_DIR_INC}/SyncMethod.h
         ${AUX_DIR_INC}/UID.h
         ${AUX_DIR_INC}/Sketches.h
+        ${AUX_DIR_INC}/dmp_diff.hpp
 
         ${DATA_DIR_INC}/DataFileC.h
         ${DATA_DIR_INC}/DataMemC.h
@@ -122,12 +127,19 @@ set(HEADERS
         ${SYNC_DIR_INC}/InterCPISync.h
         ${SYNC_DIR_INC}/PrioCPISync.h
         ${SYNC_DIR_INC}/ProbCPISync.h
+        ${SYNC_DIR_INC}/TrivialSync.h
+        ${SYNC_DIR_INC}/RCDS.h
+        ${SYNC_DIR_INC}/SetOfContent.h
 
         ${SYNC_BENCH_INC}/BenchObserv.h
         ${SYNC_BENCH_INC}/BenchParams.h
         ${SYNC_BENCH_INC}/DataObjectGenerator.h
         ${SYNC_BENCH_INC}/RandGen.h
         ${SYNC_BENCH_INC}/FromFileGen.h)
+
+# test for trivial sync
+add_executable(NORMAL_TEST_TSYNC ${NORMAL_TEST_DIR}/TrivialSyncTest.cpp)
+target_link_libraries(NORMAL_TEST_TSYNC cpisync ntl cppunit pthread gmp)
 
 include_directories(include)
 include_directories(tests)
