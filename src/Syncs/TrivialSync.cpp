@@ -14,7 +14,7 @@ TrivialSync::~TrivialSync() = default;
 bool TrivialSync::SyncClient(const shared_ptr<Communicant> &commSync, list<shared_ptr<DataObject>> &selfMinusOther,
                              list<shared_ptr<DataObject>> &otherMinusSelf) {
     try {
-        Logger::gLog(Logger::METHOD, "TSync::SyncClient");
+        Logger::gLog(Logger::METHOD, "TSync::SyncClient") ;
 
         SyncMethod::SyncClient(commSync, selfMinusOther, otherMinusSelf);
 
