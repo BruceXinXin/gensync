@@ -17,15 +17,17 @@
 #include <CPISync/Syncs/CPISync_HalfRound.h>
 #include <CPISync/Syncs/IBLTSetOfSets.h>
 #include <CPISync/Syncs/CuckooSync.h>
+#include <CPISync/Syncs/TrivialSync.h>
+#include <CPISync/Syncs/RCDS.h>
 
 #if defined (RECORD)
+
 #include <CPISync/Benchmarks/BenchParams.h>
 #include <CPISync/Benchmarks/BenchObserv.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <iomanip>
 #include <dirent.h>
-#include <CPISync/Syncs/TrivialSync.h>
 
 #endif
 
@@ -334,16 +336,23 @@ bool GenSync::serverSyncBegin(int sync_num) {
             syncSuccess &= (*syncAgent)->SyncServer(*itComm, selfMinusOther, otherMinusSelf);
         } catch (SyncFailureException& s) {
             exceptionText = s.what();
+//            cout << "Server ready to quit: " << exceptionText << endl;
             Logger::error_and_quit(exceptionText);
             return false;
         }
 
+//        cout << "I'm now here." << endl;
+
 #if defined (RECORD)
         writeSyncLog(*itComm, selfMinusOther, otherMinusSelf, syncSuccess, exceptionText);
 #endif
+//        cout << "I'm now here here." << endl;
 
         // post process and add any items that were found in the reconciliation
         _PostProcessing(otherMinusSelf, myData, &GenSync::addElem, &GenSync::delElem, this);
+
+//        cout << "I'm now here here here." << endl;
+//        cout << "Success: " << syncSuccess << endl;
     }
 
     return syncSuccess;
@@ -386,7 +395,7 @@ bool GenSync::clientSyncBegin(int sync_num) {
         _PostProcessing(otherMinusSelf, myData, &GenSync::addElem, &GenSync::delElem, this);
     }
 
-    Logger::gLog(Logger::METHOD, "Sync succeeded:  " + toStr(syncSuccess));
+    Logger::gLog(Logger::METHOD, "Sync succeeded: " + toStr(syncSuccess));
     return syncSuccess;
 
 }
@@ -516,6 +525,25 @@ GenSync GenSync::Builder::build() {
         case SyncProtocol::TrivialSync:
             myMeth = make_shared<TrivialSync>();
             break;
+        case SyncProtocol::RCDS:
+            {
+                shared_ptr<Communicant> newComm{};
+                switch (comm) {
+                    case SyncComm::socket:
+                        newComm = make_shared<CommSocket>(port + 2, host);
+                        Logger::gLog(Logger::METHOD, "Connecting to host " + host + " on port " + toStr(port + 2));
+                        break;
+                    case SyncComm::string:
+                        newComm = make_shared<CommString>(ioStr, base64);
+                        Logger::gLog(Logger::METHOD, "Connecting to " + toStr(base64 ? "base64" : "") + " string " + ioStr);
+                        break;
+                    default:
+                        throw invalid_argument(
+                                "I don't know how to set up communication through the provided requested mode.");
+                }
+                myMeth = make_shared<RCDS>(RCDS_proto, newComm);
+            }
+            break;
         default:
             throw invalid_argument("I don't know how to synchronize with this protocol.");
     }
@@ -533,3 +561,4 @@ const string GenSync::Builder::DFT_HOST = "localhost";
 const string GenSync::Builder::DFT_IO;
 const int GenSync::Builder::DFT_ERROR = 8;
 const Nullable<long> GenSync::Builder::DFT_MBAR = NOT_SET<long>();
+const GenSync::SyncProtocol GenSync::Builder::DFT_RCDS_PROTO = GenSync::SyncProtocol::IBLTSyncSetDiff;

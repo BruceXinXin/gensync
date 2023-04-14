@@ -455,13 +455,14 @@ checkClientSucceeded(multiset<string> &resultantClient, multiset<string> &initia
  * @param CLIENT_MINUS_SERVER amount of elements unique to client
  * @param SERVER_MINUS_CLIENT amount of elements unique to server
  * @param reconciled The expected reconciled dataset
+ * @param checkForSuccess If check the reconciled == result
  * @return True if the recon appears to be successful and false otherwise
  * @return true if reconciliation succeeded, false otherwise
  */
 inline bool createForkForTest(GenSync& GenSyncClient, GenSync& GenSyncServer,bool oneWay, bool probSync,bool syncParamTest,
                                const unsigned int SIMILAR,const unsigned int CLIENT_MINUS_SERVER,
                                const unsigned int SERVER_MINUS_CLIENT, multiset<string> reconciled,
-                               bool setofSets){
+                               bool setofSets, bool checkForSuccess){
 
     int child_state;
     int my_opt = 0;
@@ -479,14 +480,26 @@ inline bool createForkForTest(GenSync& GenSyncClient, GenSync& GenSyncServer,boo
         serverReport.bytes = GenSyncServer.getXmitBytes(method_num) + GenSyncServer.getRecvBytes(method_num);
         Logger::gLog(Logger::COMM,"exit a child process, server, status: " + toStr(serverReport.success) +  ", pid: " + toStr(getpid()));
 
-        multiset<string> resultantServer;
-        for (const auto &elem : GenSyncServer.dumpElements()) {
-            resultantServer.insert(elem);
+        bool serverSuccess;
+        if (checkForSuccess) {
+            multiset<string> resultantServer;
+            for (const auto &elem : GenSyncServer.dumpElements()) {
+                resultantServer.insert(elem);
+            }
+
+    //        cout << "Now I'm here." << endl;
+
+            serverSuccess = checkServerSucceeded(resultantServer, reconciled, setofSets, oneWay, serverReport);
         }
-        bool serverSuccess = checkServerSucceeded(resultantServer, reconciled, setofSets, oneWay, serverReport);
+        else {
+            serverSuccess = serverReport.success;
+        }
         Logger::gLog(Logger::COMM,
                      "server, status: " + toStr(serverReport.success) + ", check success: " + toStr(serverSuccess) +
                      ", pid: " + toStr(getpid()));
+
+//        cout << "Now I'm here here." << endl;
+//        cout << "serverSuccess: " << serverSuccess << endl;
 
         exit(serverSuccess);
     } else if (pID < 0) {
@@ -510,13 +523,19 @@ inline bool createForkForTest(GenSync& GenSyncClient, GenSync& GenSyncServer,boo
         clientReport.bytes = GenSyncClient.getXmitBytes(method_num);
         waitpid(pID, &child_state, my_opt);
 
-        multiset<string> resultantClient;
-        for (const auto& elem : GenSyncClient.dumpElements()) {
-            resultantClient.insert(elem);
-        }
+        bool isClientSuccess;
+        if (checkForSuccess) {
+            multiset<string> resultantClient;
+            for (const auto& elem : GenSyncClient.dumpElements()) {
+                resultantClient.insert(elem);
+            }
 
-        bool isClientSuccess = checkClientSucceeded(resultantClient, initialClient, reconciled, setofSets, oneWay,
-                                                    clientReport);
+            isClientSuccess = checkClientSucceeded(resultantClient, initialClient, reconciled, setofSets, oneWay,
+                                                        clientReport);
+        }
+        else {
+            isClientSuccess = clientReport.success;
+        }
         Logger::gLog(Logger::COMM, "waiting for test fork to finish, pid: " + toStr(getpid()));
         bool isSyncSuccess = isClientSuccess && bool(child_state);
 
@@ -916,7 +935,7 @@ inline bool syncTest(GenSync &GenSyncClient, GenSync &GenSyncServer, bool oneWay
 		auto objectsPtr = addElements(Multiset,SIMILAR,SERVER_MINUS_CLIENT,CLIENT_MINUS_SERVER,GenSyncServer,GenSyncClient,reconciled);
 		//Returns a boolean value for the success of the synchronization
         success &= createForkForTest(GenSyncClient, GenSyncServer, oneWay, probSync, syncParamTest, SIMILAR,
-                                      CLIENT_MINUS_SERVER,SERVER_MINUS_CLIENT, reconciled,false);
+                                      CLIENT_MINUS_SERVER,SERVER_MINUS_CLIENT, reconciled , false, true);
 		//Remove all elements from GenSyncs and clear dynamically allocated memory for reuse
 		success &= GenSyncServer.clearData();
 		success &= GenSyncClient.clearData();
@@ -926,6 +945,51 @@ inline bool syncTest(GenSync &GenSyncClient, GenSync &GenSyncServer, bool oneWay
 		reconciled.clear();
 	}
 	return success; // returns success status of tests
+}
+
+
+/**
+ * Self-specified data for test.
+ * @param GenSyncClient
+ * @param GenSyncServer
+ * @param serverData
+ * @param clientData
+ * @param oneWay
+ * @return
+ */
+inline bool
+syncTest(GenSync &GenSyncClient,
+         GenSync &GenSyncServer,
+         const vector<shared_ptr<DataObject>>& serverData,
+         const vector<shared_ptr<DataObject>>& clientData,
+         bool oneWay){
+
+    //Seed test so that changing other tests does not cause failure in tests with a small probability of failure
+    //Don't seed oneWay tests because they loop on the outside of syncTest and you want different values for each run
+    if(!oneWay) srand(3721);
+    bool success = true;
+
+    //If one way, run 1 time, if not run NUM_TESTS times
+    for(int ii = 0 ; ii < (oneWay ?  1 : NUM_TESTS); ii++) {
+//        multiset<string> reconciled;
+
+        // add elements to server, client and reconciled
+//        auto objectsPtr = addElements(Multiset,SIMILAR,SERVER_MINUS_CLIENT,CLIENT_MINUS_SERVER,GenSyncServer,GenSyncClient,reconciled);
+        for (const auto& d: serverData)
+            GenSyncServer.addElem(d);
+        for (const auto& d: clientData)
+            GenSyncClient.addElem(d);
+        //Returns a boolean value for the success of the synchronization
+        success &= createForkForTest(GenSyncClient, GenSyncServer, oneWay, false, false, 0,
+                                     0, 0, {}, false, false);
+        //Remove all elements from GenSyncs and clear dynamically allocated memory for reuse
+        success &= GenSyncServer.clearData();
+        success &= GenSyncClient.clearData();
+
+//        //Memory is deallocated here because these are shared_ptrs and are deleted when the last ptr to an object is deleted
+//        reconciled.clear();
+    }
+    return success; // returns success status of tests
 }
 
 

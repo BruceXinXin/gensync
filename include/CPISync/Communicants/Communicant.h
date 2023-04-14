@@ -17,6 +17,7 @@
 #include <CPISync/Syncs/IBLT.h>
 #include <CPISync/Syncs/IBLTMultiset.h>
 #include <CPISync/Syncs/Cuckoo.h>
+#include <CPISync/Syncs/StrataEst.h>
 
 // namespace imports
 using namespace NTL;
@@ -418,6 +419,16 @@ public:
             }
         }
     }
+
+    /**
+     * @author Bruce Xin
+     */
+    void commSend(const hashVal num);
+
+    /**
+     * @author Bruce Xin
+     */
+    size_t commRecv_size_t();
 
     // Informational
     /**

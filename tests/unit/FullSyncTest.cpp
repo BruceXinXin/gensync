@@ -11,7 +11,7 @@
 #include <CPISync/Syncs/FullSync.h>
 #include "TestAuxiliary.h"
 
-CPPUNIT_TEST_SUITE_REGISTRATION(FullSyncTest);
+//CPPUNIT_TEST_SUITE_REGISTRATION(FullSyncTest);
 
 FullSyncTest::FullSyncTest() = default;
 

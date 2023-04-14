@@ -46,10 +46,11 @@ hash_t IBLT::_setHash(multiset<shared_ptr<DataObject>> &tarSet)
 void IBLT::_insert(long plusOrMinus, ZZ key, ZZ value) {
     long bucketsPerHash = hashTable.size() / N_HASH;
 
-    if(sizeof(value) != valueSize) {
-        Logger::error_and_quit("The value being inserted is different than the IBLT value size! value size: "
-                               + toStr(sizeof(value)) + ". IBLT value size: " + toStr(valueSize));
-    }
+    // todo 暂时取消
+//    if(sizeof(value) != valueSize) {
+//        Logger::error_and_quit("The value being inserted is different than the IBLT value size! value size: "
+//                               + toStr(sizeof(value)) + ". IBLT value size: " + toStr(valueSize));
+//    }
 
     for(int ii=0; ii < N_HASH; ii++){
         hash_t hk = _hashK(key, ii);

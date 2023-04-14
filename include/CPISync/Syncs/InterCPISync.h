@@ -147,9 +147,10 @@ protected:
 private:
     // METHODS
 
-  // TODO: Novak's quick fix. This is the wrong approach.
-  static bool serverConnectedBefore;
-  static bool clientConnectedBefore;
+    // fixme: 取消这两个东西, 可能会导致两次连接
+//  // TODO: Novak's quick fix. This is the wrong approach.
+//  static bool serverConnectedBefore;
+//  static bool clientConnectedBefore;
 
     /**
      * Deletes all memory associate with the given tree.

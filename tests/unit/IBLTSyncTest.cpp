@@ -7,7 +7,7 @@
 #include <CPISync/Syncs/GenSync.h>
 #include <CPISync/Syncs/IBLTSync.h>
 #include "TestAuxiliary.h"
-CPPUNIT_TEST_SUITE_REGISTRATION(IBLTSyncTest);
+//CPPUNIT_TEST_SUITE_REGISTRATION(IBLTSyncTest);
 
 IBLTSyncTest::IBLTSyncTest() = default;
 

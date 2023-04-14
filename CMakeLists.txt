@@ -67,6 +67,7 @@ set(SOURCE_FILES
         ${SYNC_DIR}/IBLTMultiset.cpp
         ${SYNC_DIR}/IBLTSync.cpp
         ${SYNC_DIR}/IBLTSync_Multiset.cpp
+        ${SYNC_DIR}/IBLTSync_SetDiff.cpp
         ${SYNC_DIR}/IBLTSetOfSets.cpp
         ${SYNC_DIR}/Compact2DBitArray.cpp
         ${SYNC_DIR}/Cuckoo.cpp
@@ -75,6 +76,7 @@ set(SOURCE_FILES
         ${SYNC_DIR}/TrivialSync.cpp
         ${SYNC_DIR}/RCDS.cpp
         ${SYNC_DIR}/SetOfContent.cpp
+        ${SYNC_DIR}/StrataEst.cpp
 
         ${BENCH_DIR}/Runner.cpp
         ${BENCH_DIR}/BenchParams.cpp
@@ -121,6 +123,7 @@ set(HEADERS
         ${SYNC_DIR_INC}/IBLTSetOfSets.h
         ${SYNC_DIR_INC}/IBLTSync_HalfRound.h
         ${SYNC_DIR_INC}/IBLTSync_Multiset.h
+        ${SYNC_DIR_INC}/IBLTSync_SetDiff.h
         ${SYNC_DIR_INC}/Compact2DBitArray.h
         ${SYNC_DIR_INC}/Cuckoo.h
         ${SYNC_DIR_INC}/CuckooSync.h
@@ -130,6 +133,7 @@ set(HEADERS
         ${SYNC_DIR_INC}/TrivialSync.h
         ${SYNC_DIR_INC}/RCDS.h
         ${SYNC_DIR_INC}/SetOfContent.h
+        ${SYNC_DIR_INC}/StrataEst.h
 
         ${SYNC_BENCH_INC}/BenchObserv.h
         ${SYNC_BENCH_INC}/BenchParams.h
@@ -140,6 +144,10 @@ set(HEADERS
 # test for trivial sync
 add_executable(NORMAL_TEST_TSYNC ${NORMAL_TEST_DIR}/TrivialSyncTest.cpp)
 target_link_libraries(NORMAL_TEST_TSYNC cpisync ntl cppunit pthread gmp)
+
+# test for SetOfContent
+add_executable(NORMAL_TEST_SOC ${NORMAL_TEST_DIR}/SetOfContentTest.cpp)
+target_link_libraries(NORMAL_TEST_SOC cpisync ntl cppunit pthread gmp)
 
 include_directories(include)
 include_directories(tests)

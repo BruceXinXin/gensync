@@ -506,8 +506,9 @@ bool CPISync::SyncClient(const shared_ptr<Communicant>& commSync, list<shared_pt
 		_makeStructures(commSync, selfMinusOther, otherMinusSelf, delta_self, delta_other);
         delta_self.kill();
         delta_other.kill();
-        if (!keepAlive)
-            commSync->commClose();
+        // fixme: 先不让其关闭连接
+//        if (!keepAlive)
+//            commSync->commClose();
 
         //Record Stats
         double idle_comm = mySyncStats.totalTime();
@@ -660,8 +661,9 @@ bool CPISync::SyncServer(const shared_ptr<Communicant>& commSync, list<shared_pt
     } while (result); //end of while	
 
 
-    if (!keepAlive)
-        commSync->commClose();
+    // fixme: 先不让其关闭连接
+//    if (!keepAlive)
+//        commSync->commClose();
     delta_other.kill();
     delta_self.kill();
     self_hash.clear();

@@ -14,8 +14,8 @@
 #include <CPISync/Syncs/CPISync.h>
 #include <CPISync/Syncs/InterCPISync.h>
 
-bool InterCPISync::serverConnectedBefore = false;
-bool InterCPISync::clientConnectedBefore = false;
+//bool InterCPISync::serverConnectedBefore = false;
+//bool InterCPISync::clientConnectedBefore = false;
 
 InterCPISync::InterCPISync(long m_bar, long bits, int epsilon, int partition,
                            bool Hashes /* = false*/)
@@ -121,13 +121,13 @@ bool InterCPISync::SyncClient(const shared_ptr<Communicant> &commSync,
                               list<shared_ptr<DataObject>> &selfMinusOther,
                               list<shared_ptr<DataObject>> &otherMinusSelf) {
     Logger::gLog(Logger::METHOD, "Entering InterCPISync::SyncClient");
-    if (!clientConnectedBefore) {
-        clientConnectedBefore = true;
-
-        mySyncStats.timerStart(SyncStats::IDLE_TIME);
-        commSync->commConnect();
-        mySyncStats.timerEnd(SyncStats::IDLE_TIME);
-    }
+//    if (!clientConnectedBefore) {
+//        clientConnectedBefore = true;
+//
+//        mySyncStats.timerStart(SyncStats::IDLE_TIME);
+//        commSync->commConnect();
+//        mySyncStats.timerEnd(SyncStats::IDLE_TIME);
+//    }
 
     // 0. Set up communicants
     if (!useExisting) {
@@ -168,9 +168,10 @@ bool InterCPISync::SyncClient(const shared_ptr<Communicant> &commSync,
                      "Synchronization failed.  Please increase bit size of "
                      "elements or reduce partition factor.");
 
+    // fixme: 先不让其关闭连接
     // Close communicants
-    if (!useExisting)
-        commSync->commClose();
+//    if (!useExisting)
+//        commSync->commClose();
 
     // Record Stats
 
@@ -233,13 +234,13 @@ bool InterCPISync::SyncServer(const shared_ptr<Communicant> &commSync,
     bool result =
         SyncMethod::SyncServer(commSync, selfMinusOther, otherMinusSelf);
 
-    if (!serverConnectedBefore) {
-        mySyncStats.timerStart(SyncStats::IDLE_TIME);
-        commSync->commListen();
-        mySyncStats.timerEnd(SyncStats::IDLE_TIME);
-
-        serverConnectedBefore = true;
-    }
+//    if (!serverConnectedBefore) {
+//        mySyncStats.timerStart(SyncStats::IDLE_TIME);
+//        commSync->commListen();
+//        mySyncStats.timerEnd(SyncStats::IDLE_TIME);
+//
+//        serverConnectedBefore = true;
+//    }
 
     // 0. Set up communicants
     if (!useExisting) {
@@ -272,9 +273,10 @@ bool InterCPISync::SyncServer(const shared_ptr<Communicant> &commSync,
                      "Synchronization failed.  Please increase bit size of "
                      "elements or reduce partition factor.");
 
+    // fixme: 先不让其关闭连接
     // 2. Close communicants
-    if (!useExisting)
-        commSync->commClose();
+//    if (!useExisting)
+//        commSync->commClose();
 
     return result;
 }

@@ -210,6 +210,18 @@ void Communicant::commSend(const long num) {
     commSend(ustring(toSend, XMIT_LONG), XMIT_LONG);
 }
 
+/**
+ * @author Bruce Xin
+ * @param num
+ */
+void Communicant::commSend(const hashVal num) {
+
+    unsigned char toSend[XMIT_LONG];
+    BytesFromZZ(toSend, to_ZZ(num), XMIT_LONG);
+    Logger::gLog(Logger::COMM, "... attempting to send: hashVal " + toStr(num));
+    commSend(ustring(toSend, XMIT_LONG), XMIT_LONG);
+}
+
 void Communicant::commSend(const byte bt) {
 
     Logger::gLog(Logger::COMM, string("... attempting to send: byte num ") + toStr((int) bt));
@@ -400,9 +412,11 @@ ustring Communicant::commRecv_ustring(size_t numBytes) {
 
 string Communicant::commRecv_string() {
     unsigned long sz = narrow_cast<unsigned long>(commRecv_long());
+//    Logger::gLog(Logger::TEST, "... received1: sz: " + to_string(sz));
     string str = commRecv(sz);
 
     Logger::gLog(Logger::COMM, "... received: string " + str);
+//    Logger::gLog(Logger::TEST, "... received: string " + str);
 
     return str;
 }
@@ -478,6 +492,14 @@ long Communicant::commRecv_long() {
     Logger::gLog(Logger::COMM, "... received long " + toStr(num));
 
     return to_long(num);
+}
+
+size_t Communicant::commRecv_size_t() {
+    ustring received = commRecv_ustring(sizeof(size_t));
+    ZZ num = ZZFromBytes(received.data(), sizeof(size_t));
+    Logger::gLog(Logger::COMM, "... received size_t " + toStr(num));
+
+    return to_ulong(num);
 }
 
 int Communicant::commRecv_int() {

@@ -40,7 +40,7 @@ public:
 	/**
 	 * Test adding and deleting elements from CPISync
 	 */
-	static void testCPIAddDelElem();
+	void testCPIAddDelElem();
 
 	/**
  	* Test a synchronization of sets with CPISync
@@ -48,7 +48,7 @@ public:
 	 * CPISync can also fail if mBar is smaller than the number of differences but the differences have been capped by mbar for this test
 	 * probSync false does a more complete check of the functionality of CPISync and passes the first 10,000 test cases with this seed
  	*/
-	static void CPISyncSetReconcileTest();
+	void CPISyncSetReconcileTest();
 
 	/**
  	* Test a synchronization of multisets with CPISync (Elements can be repeated)
@@ -56,38 +56,38 @@ public:
 	 * CPISync can also fail if mBar is smaller than the number of differences but the differences have been capped by mbar for this test
 	 * probSync false does a more complete check of the functionality of CPISync and passes the first 10,000 test cases with this seed
  	*/
-	static void CPISyncMultisetReconcileTest();
+	void CPISyncMultisetReconcileTest();
 
 	/*
 	 * Test a synchronization of large sets using CPISync. This test may be limited by the heap size of a users machine
 	 * TODO: Add a number here once the sie of "Large" is chosen
 	 */
-	static void CPISyncLargeSetReconcileTest();
+	void CPISyncLargeSetReconcileTest();
 
 	/**
 	 * Test the synchronization of sets using ProbCPISync
 	 * Same as CPISync but if more than m_bar differences are present the CPISync divides into smaller subproblems
 	 */
-	static void ProbCPISyncSetReconcileTest();
+	void ProbCPISyncSetReconcileTest();
 
 	/**
 	 * Test the synchronization of multisets using ProbCPISync
  	 * Same as CPISync but if more than m_bar differences are present the CPISync divides into smaller subproblems
 	 */
-	static void ProbCPISyncMultisetReconcileTest();
+	void ProbCPISyncMultisetReconcileTest();
 
 	/**
 	 * Test the synchronization of large sets using ProbCPISync
 	 * Same as CPISync but if more than m_bar differences are present the CPISync divides into smaller subproblems
 	 */
-	static void ProbCPISyncLargeSetReconcileTest();
+	void ProbCPISyncLargeSetReconcileTest();
 
 	//InterCPISync Test cases
 
 	/**
  	* Test adding and deleting elements from InterCPISync
  	*/
-	static void testInterCPIAddDelElem();
+	void testInterCPIAddDelElem();
 
 	/**
  	 * Test a synchronization with InterCPISync
@@ -98,12 +98,12 @@ public:
 	 * sync properly when called again in syncTest. If delete does not succeed then the sync will fail when called multiple times
 	 * because the real reconciled set will have additional elements that the expected reconcilled set does not have
  	*/
-	static void InterCPISyncSetReconcileTest();
+	void InterCPISyncSetReconcileTest();
 
 	/**
  	 * Test a synchronization with InterCPISync
  	*/
-	static void InterCPISyncMultisetReconcileTest();
+	void InterCPISyncMultisetReconcileTest();
 
 	/**
 	 * Test a synchronization with InterCPISync
@@ -114,7 +114,7 @@ public:
 	 * sync properly when called again in syncTest. If delete does not succeed then the sync will fail when called multiple times
 	 * because the real reconciled set will have additional elements that the expected reconcilled set does not have
 	 */
-	static void InterCPISyncLargeSetReconcileTest();
+	void InterCPISyncLargeSetReconcileTest();
 
 
 };

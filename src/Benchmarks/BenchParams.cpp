@@ -19,6 +19,7 @@
 #include <CPISync/Syncs/IBLTSetOfSets.h>
 #include <CPISync/Syncs/CuckooSync.h>
 #include <CPISync/Syncs/TrivialSync.h>
+#include <CPISync/Syncs/RCDS.h>
 
 const char BenchParams::KEYVAL_SEP = ':';
 const string BenchParams::FILEPATH_SEP = "/"; // TODO: we currently don't compile for _WIN32!
@@ -188,7 +189,7 @@ inline string getReference(istream& is, const string& origFile) {
         string refFName = segments.at(1);
 
         // trim leading and trailing spaces
-        refFName = std::regex_replace(refFName, std::regex("^ +| +$"), "");
+        refFName = std::regex_replace(refFName, std::regex("^ +| +$"), string());
 
         // build the relative path to the referenced file
         auto origFNameLen = origFile.substr(origFile.find_last_of(BenchParams::FILEPATH_SEP)).length();
@@ -259,6 +260,7 @@ BenchParams::BenchParams(SyncMethod& meth) :
         syncParams = make_shared<CPISyncParams>(interCpi->getMaxDiff(), interCpi->getBitNum(),
                                                 interCpi->getProbEps(), interCpi->getHashes(),
                                                 interCpi->getPFactor());
+//        syncParams = make_shared<InterCPISyncParams>();
         return;
     }
 
@@ -317,6 +319,13 @@ BenchParams::BenchParams(SyncMethod& meth) :
     if (trivial) {
         syncProtocol = GenSync::SyncProtocol::TrivialSync;
         syncParams = make_shared<TrivialSyncParams>();
+        return;
+    }
+
+    auto rcds = dynamic_cast<RCDS*>(&meth);
+    if (rcds) {
+        syncProtocol = GenSync::SyncProtocol::RCDS;
+        syncParams = make_shared<RCDSParams>();
         return;
     }
 

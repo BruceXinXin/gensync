@@ -50,6 +50,15 @@ struct TrivialSyncParams : Params {
     void apply(GenSync::Builder& gsb) const {};
 };
 
+/**
+ * @author Bruce Xin
+ */
+struct RCDSParams : Params {
+    ostream& serialize(ostream& os) const {os << "RCDSSync\n"; return os;};
+    istream& unserialize(istream& is) {string line; getline(is, line); return is;};
+    void apply(GenSync::Builder& gsb) const {};
+};
+
 struct CPISyncParams : Params {
     size_t m_bar;
     size_t bits;

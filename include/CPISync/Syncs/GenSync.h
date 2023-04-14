@@ -321,9 +321,11 @@ public:
         IBLTSync,
         OneWayIBLTSync,
         IBLTSetOfSets,
+        IBLTSyncSetDiff,
         IBLTSync_Multiset,
         CuckooSync,
         TrivialSync,
+        RCDS,
         END     // one after the end of iterable options
     };
 
@@ -392,10 +394,12 @@ public:
     bits(DFT_BITS),
     numParts(DFT_PARTS),
     hashes(HASHES),
+    RCDS_proto(DFT_RCDS_PROTO),
     numExpElem(DFT_EXPELEMS){
         myComm = nullptr;
         myMeth = nullptr;
     }
+
 
     /**
      * Builds a GenSync object.
@@ -532,6 +536,18 @@ public:
         return *this;
     }
 
+    /**
+     * @author Bruce Xin
+     * @param protocol
+     * @return
+     */
+    Builder &setRCDSProto(SyncProtocol protocol) {
+        this->RCDS_proto = protocol;
+        return *this;
+    }
+
+
+
 
     /**
      * Destructor - clear up any possibly allocated internal variables
@@ -562,6 +578,9 @@ private:
     Nullable<size_t> bucketSize;
     Nullable<size_t> filterSize;
     Nullable<size_t> maxKicks;
+    // For RCDS
+    SyncProtocol RCDS_proto; /** RCDS base protocol */
+    Nullable<string> RCDS_folder_or_file_name; /** RCDS synchronization target */
 
 
     // ... bookkeeping variables
@@ -582,6 +601,8 @@ private:
     static const string DFT_HOST;
     static const string DFT_IO;
     static const int DFT_ERROR;
+    // For RCDS
+    static const SyncProtocol DFT_RCDS_PROTO;
 };
 
 #endif
