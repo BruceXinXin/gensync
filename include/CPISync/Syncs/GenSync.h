@@ -13,8 +13,8 @@
 
 #include <CPISync/Communicants/Communicant.h>
 #include <CPISync/Data/DataObject.h>
-#include <CPISync/Aux/Auxiliary.h>
-#include <CPISync/Aux/SyncMethod.h>
+#include <CPISync/Aux_/Auxiliary.h>
+#include <CPISync/Aux_/SyncMethod.h>
 
 // namespace info
 using std::string;
@@ -323,6 +323,7 @@ public:
         IBLTSetOfSets,
         IBLTSync_Multiset,
         CuckooSync,
+        TrivialSync,
         END     // one after the end of iterable options
     };
 

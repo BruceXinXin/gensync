@@ -4,7 +4,7 @@
 #include <fstream>
 
 #include <CPISync/Syncs/GenSync.h>
-#include <CPISync/Aux/Exceptions.h>
+#include <CPISync/Aux_/Exceptions.h>
 #include <CPISync/Syncs/CPISync.h>
 #include <CPISync/Communicants/CommSocket.h>
 #include <CPISync/Communicants/CommString.h>
@@ -25,6 +25,8 @@
 #include <sys/types.h>
 #include <iomanip>
 #include <dirent.h>
+#include <CPISync/Syncs/TrivialSync.h>
+
 #endif
 
 using namespace std::chrono;
@@ -510,6 +512,9 @@ GenSync GenSync::Builder::build() {
             break;
         case SyncProtocol::IBLTSync_Multiset:
             myMeth = make_shared<IBLTSync_Multiset>(numExpElem, bits);
+            break;
+        case SyncProtocol::TrivialSync:
+            myMeth = make_shared<TrivialSync>();
             break;
         default:
             throw invalid_argument("I don't know how to synchronize with this protocol.");

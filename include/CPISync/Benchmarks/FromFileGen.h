@@ -11,7 +11,7 @@
 
 #include <iostream>
 #include <CPISync/Benchmarks/DataObjectGenerator.h>
-#include <CPISync/Aux/Auxiliary.h>
+#include <CPISync/Aux_/Auxiliary.h>
 
 /**
  * Generates DataObjects from a file of base64 encoded ZZ objects.

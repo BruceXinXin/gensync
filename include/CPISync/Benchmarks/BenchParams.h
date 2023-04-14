@@ -13,7 +13,7 @@
 #include <CPISync/Syncs/GenSync.h>
 #include <CPISync/Benchmarks/DataObjectGenerator.h>
 #include <CPISync/Benchmarks/FromFileGen.h>
-#include <CPISync/Aux/Sketches.h>
+#include <CPISync/Aux_/Sketches.h>
 
 /**
  * Virtual class to represent the parameters of the syncs.
@@ -37,6 +37,15 @@ struct Params {
 
 struct FullSyncParams : Params {
     ostream& serialize(ostream& os) const {os << "FullSync\n"; return os;};
+    istream& unserialize(istream& is) {string line; getline(is, line); return is;};
+    void apply(GenSync::Builder& gsb) const {};
+};
+
+/**
+ * @author Bruce Xin
+ */
+struct TrivialSyncParams : Params {
+    ostream& serialize(ostream& os) const {os << "TrivialSync\n"; return os;};
     istream& unserialize(istream& is) {string line; getline(is, line); return is;};
     void apply(GenSync::Builder& gsb) const {};
 };

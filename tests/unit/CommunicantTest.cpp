@@ -324,3 +324,24 @@ void CommunicantTest::testCommZZNoArgs(){
         CPPUNIT_ASSERT_EQUAL(exp, cRecv.commRecv_ZZ());
     }
 }
+
+void CommunicantTest::testCommSequence() {
+    static constexpr int seq_len = 1e2;
+
+    queue<char> qq;
+    CommDummy cSend(&qq);
+    CommDummy cRecv(&qq);
+
+    for (int i = 0; i < TIMES; ++i) {
+        vector<shared_ptr<DataObject>> objs, recv;
+        objs.reserve(seq_len);
+        for (int j = 0; j < seq_len; ++j) {
+            objs.emplace_back(make_shared<DataObject>(randString(0, seq_len)));
+        }
+        cSend.Communicant::commSendSequenceOfSDO(objs);
+        cRecv.Communicant::commRecvSequenceOfSDO(recv);
+        for (int j = 0; j < seq_len; ++j) {
+            CPPUNIT_ASSERT_EQUAL(*objs[j], *recv[j]);
+        }
+    }
+}

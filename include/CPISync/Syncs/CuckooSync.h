@@ -12,8 +12,8 @@
 #ifndef CPISYNCLIB_CUCKOOSYNC_H
 #define CPISYNCLIB_CUCKOOSYNC_H
 
-#include <CPISync/Aux/SyncMethod.h>
-#include <CPISync/Aux/Auxiliary.h>
+#include <CPISync/Aux_/SyncMethod.h>
+#include <CPISync/Aux_/Auxiliary.h>
 #include <CPISync/Syncs/Cuckoo.h>
 
 class CuckooSync : public SyncMethod {

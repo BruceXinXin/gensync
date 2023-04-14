@@ -18,6 +18,7 @@
 #include <CPISync/Syncs/CPISync_HalfRound.h>
 #include <CPISync/Syncs/IBLTSetOfSets.h>
 #include <CPISync/Syncs/CuckooSync.h>
+#include <CPISync/Syncs/TrivialSync.h>
 
 const char BenchParams::KEYVAL_SEP = ':';
 const string BenchParams::FILEPATH_SEP = "/"; // TODO: we currently don't compile for _WIN32!
@@ -309,6 +310,13 @@ BenchParams::BenchParams(SyncMethod& meth) :
     if (ibltMulti) {
         syncProtocol = GenSync::SyncProtocol::IBLTSync_Multiset;
         syncParams = make_shared<IBLTParams>(ibltMulti->getExpNumElems(), ibltMulti->getElementSize());
+        return;
+    }
+
+    auto trivial = dynamic_cast<TrivialSync*>(&meth);
+    if (trivial) {
+        syncProtocol = GenSync::SyncProtocol::TrivialSync;
+        syncParams = make_shared<TrivialSyncParams>();
         return;
     }
 

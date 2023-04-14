@@ -11,7 +11,7 @@
 #include <cerrno>
 #include <NTL/ZZ_p.h>
 #include <NTL/vec_ZZ_p.h>
-#include <CPISync/Aux/ConstantsAndTypes.h>
+#include <CPISync/Aux_/ConstantsAndTypes.h>
 #include <CPISync/Data/DataObject.h>
 #include <CPISync/Data/DataPriorityObject.h>
 #include <CPISync/Syncs/IBLT.h>
@@ -342,8 +342,84 @@ public:
      */
     IBLTMultiset commRecv_IBLTMultiset(Nullable<size_t> size, Nullable<size_t> eltSize);
 
-    // Informational
+    /**
+     * Send a data object sequence with simple serialization
+     * @tparam T: sequence type
+     * @param sequence that uses forward iterator
+     * @param max_len: flush data when size >= max_len
+     * @author Bruce Xin
+     */
+    template<typename T, typename = typename enable_if<is_same<typename T::value_type, shared_ptr<DataObject>>::value>::type>
+    void commSendSequenceOfSDO(const T& sequence, size_t max_len= 1400) {
+        long size = sequence.size();
+        // firstly, send total size
+        commSend(size);
 
+        // then, send data
+        string to_send_len;
+        string to_send_data; to_send_data.reserve(max_len * 1.05);
+        for (auto iter = begin(sequence); iter != end(sequence); ++ iter) {
+            string tmp = iter->get()->to_string();
+            to_send_len.append(to_string(tmp.size()));
+            to_send_len.push_back(',');
+            to_send_data.append(tmp);
+
+            // send data
+            if (to_send_data.size() >= max_len) {
+                commSend(to_send_len);
+                commSend(to_send_data);
+                to_send_len.clear();
+                to_send_data.clear();
+            }
+        }
+        // send last data
+        if (!to_send_len.empty()) {
+            commSend(to_send_len);
+            commSend(to_send_data);
+        }
+    }
+
+    /**
+     * Receive data objects and load them to seq with simple deserialization
+     * @tparam T: sequence that has push_back() method.
+     * @param sequence
+     * @author Bruce Xin
+     */
+//    template<typename T, typename = typename enable_if<is_same<typename iterator_traits<T>::iterator_category, output_iterator_tag>::value>::type>
+//    template<typename T,
+//            typename = typename enable_if<
+//                    (is_same<output_iterator_tag, typename iterator_traits<T>::iterator_category>::value
+//                    || (is_base_of<forward_iterator_tag, typename iterator_traits<T>::iterator_category>::value
+//                    && !is_const<T>::value))
+//                    && has_member_push_back<typename T::container_type, size_t>::value>::type
+//            >
+    template<typename T, typename = typename enable_if<is_same<typename T::value_type, shared_ptr<DataObject>>::value>::type>
+    void commRecvSequenceOfSDO(T& sequence) {
+        // total object number
+        long size = commRecv_long();
+        // todo: template support for checking if reserve exists in T
+//        sequence.reserve(size);
+
+        size_t total = 0;
+        while (total < size) {
+            string to_recv_len = commRecv_string();
+            string to_recv_data = commRecv_string();
+            size_t idx = 0, pre = 0;
+            // current complete count
+            size_t cnt = 0;
+            while ((idx = to_recv_len.find(',', pre)) != string::npos) {
+                size_t cur_size = stoi(to_recv_len.substr(pre, idx - pre));
+                sequence.push_back(make_shared<DataObject>(to_recv_data.substr(cnt, cur_size)));
+//                it = make_shared<DataObject>(to_recv_data.substr(cnt, cur_size));
+
+                cnt += cur_size;
+                pre = idx + 1;
+                ++ total;
+            }
+        }
+    }
+
+    // Informational
     /**
      * Resets communication counters that record the number of bytes transmitted/received since the last communication counter reset
      */

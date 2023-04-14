@@ -21,7 +21,7 @@
 #include <vector>
 #include <cstddef>
 #include <mutex>
-#include <CPISync/Aux/Auxiliary.h>
+#include <CPISync/Aux_/Auxiliary.h>
 
 #define BYTE 8
 

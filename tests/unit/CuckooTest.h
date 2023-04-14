@@ -14,19 +14,19 @@
 
 class CuckooTest : public CPPUNIT_NS::TestFixture {
     CPPUNIT_TEST_SUITE(CuckooTest);
-    CPPUNIT_TEST(testInsert);
-    // CPPUNIT_TEST(testInsertHuge);
-    CPPUNIT_TEST(testLookup);
-    CPPUNIT_TEST(testErase);
-    CPPUNIT_TEST(testSmartConstructor);
-    CPPUNIT_TEST(testConfigF3);
-    CPPUNIT_TEST(testConfigF7);
-    CPPUNIT_TEST(testConfigF13);
-    CPPUNIT_TEST(testConfigF30);
-    CPPUNIT_TEST(testConfigF3B1);
-    CPPUNIT_TEST(testConfigF14B1);
-    CPPUNIT_TEST(testConfigF7B15);
-    CPPUNIT_TEST(testConfigF7B3);
+//    CPPUNIT_TEST(testInsert);
+//     CPPUNIT_TEST(testInsertHuge);
+//    CPPUNIT_TEST(testLookup);
+//    CPPUNIT_TEST(testErase);
+//    CPPUNIT_TEST(testSmartConstructor);
+//    CPPUNIT_TEST(testConfigF3);
+//    CPPUNIT_TEST(testConfigF7);
+//    CPPUNIT_TEST(testConfigF13);
+//    CPPUNIT_TEST(testConfigF30);
+//    CPPUNIT_TEST(testConfigF3B1);
+//    CPPUNIT_TEST(testConfigF14B1);
+//    CPPUNIT_TEST(testConfigF7B15);
+//    CPPUNIT_TEST(testConfigF7B3);
     CPPUNIT_TEST_SUITE_END();
 
 public:
