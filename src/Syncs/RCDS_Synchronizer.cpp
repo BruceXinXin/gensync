@@ -3,7 +3,6 @@
 //
 
 #include <CPISync/Syncs/RCDS_Synchronizer.h>
-#include <unordered_map>
 
 RCDS_Synchronizer::RCDS_Synchronizer(size_t terminal_str_size, size_t levels, size_t partition,
                                      GenSync::SyncProtocol base_set_proto, size_t shingle_size, size_t space)
@@ -43,24 +42,18 @@ string RCDS_Synchronizer::retrieve_string() {
         }
     }
 
-    return substring.empty() ? data : substring;
+    return substring.empty()? data: substring;
 }
 
-
-bool RCDS_Synchronizer::addStr(shared_ptr<DataObject>& str_p, vector<shared_ptr<DataObject>> &datum) {
+bool RCDS_Synchronizer::add_str(shared_ptr<DataObject>& str) {
     Logger::gLog(Logger::METHOD,
                  "Entering RCDS_Synchronizer::addStr. Parameters - num of par: " + to_string(partition_num) + ", num of lvls: "
                  + to_string(level_num) + ", Terminal String Size: " + to_string(terminalStrSz) + ", Actual String Size: " +
                  to_string(data.size()));
 
-    data = str_p->to_string();
+    data = str->to_string();
 
     if (data.empty()) return false;
-
-//    // 源码就是这么写的, 待修复
-//    if (myString.size() / pow(Partition, Levels) < 1)
-//        throw invalid_argument("Terminal String size could end up less than 1, limited at" + to_string(TermStrSize) +
-//                         ", please consider lessen the levels or number of partitions");
 
     if (level_num <= 0)
         Logger::error_and_quit("Level cannot > 0!");
@@ -71,12 +64,10 @@ bool RCDS_Synchronizer::addStr(shared_ptr<DataObject>& str_p, vector<shared_ptr<
     // 加了引用
     for (auto& item : getHashShingles_ZZ())
         setPointers.emplace_back(new DataObject(item));
-    datum = setPointers;
     return true;
 }
 
-bool RCDS_Synchronizer::SyncServer(const shared_ptr<Communicant> &commSync, list<shared_ptr<DataObject>> &selfMinusOther,
-                                   list<shared_ptr<DataObject>> &otherMinusSelf) {
+bool RCDS_Synchronizer::SyncServer(const shared_ptr<Communicant> &commSync) {
     Logger::gLog(Logger::METHOD, "Entering RCDS_Synchronizer::SyncServer");
     if (!useExistingConnection) {
         Logger::gLog(Logger::METHOD, "Chose not use existing connection.");
@@ -113,28 +104,29 @@ bool RCDS_Synchronizer::SyncServer(const shared_ptr<Communicant> &commSync, list
         mbar = 1 << 10;
     }
 
-    // ------------------------- Sync hash shingles
-
     bool success = false;
-    size_t top_mbar = pow(2 * partition_num, level_num) * 2; // Upper bound on the number of symmetrical difference
-    // If failed, try bigger mbar, inspired by Bowen
-    while (!success && mbar < top_mbar) {
-        success = setReconServer(commSync, mbar, sizeof(shingle), setPointers, selfMinusOther, otherMinusSelf);
-        success &= (SYNC_SUCCESS == commSync->commRecv_int());
-        commSync->commSend(success? SYNC_SUCCESS: SYNC_FAILURE);
-        if (success || GenSync::SyncProtocol::IBLTSyncSetDiff != baseSyncProtocol)
-            break;
+    {
+        size_t top_mbar = pow(2 * partition_num, level_num) * 2; // Upper bound on the number of symmetrical difference
+        // If failed, try bigger mbar, inspired by Bowen
+        list<shared_ptr<DataObject>> selfMinusOther, otherMinusSelf;
+        while (!success && mbar < top_mbar) {
+            success = setReconServer(commSync, mbar, sizeof(shingle), setPointers, selfMinusOther, otherMinusSelf);
+            success &= (SYNC_SUCCESS == commSync->commRecv_int());
+            commSync->commSend(success ? SYNC_SUCCESS : SYNC_FAILURE);
+            if (success || GenSync::SyncProtocol::IBLTSyncSetDiff != baseSyncProtocol)
+                break;
 
-        Logger::gLog(Logger::METHOD,
-                     "RCDS_Synchronizer::SyncServer - mbar doubled from " + to_string(mbar) + " to " +
-                     to_string(2 * (mbar + 1)));
-        mbar = 2 * (mbar + 1);
+            Logger::gLog(Logger::METHOD,
+                         "RCDS_Synchronizer::SyncServer - mbar doubled from " + to_string(mbar) + " to " +
+                         to_string(2 * (mbar + 1)));
+            mbar = 2 * (mbar + 1);
+        }
     }
 
     // get query size
     size_t query_size = commSync->commRecv_size_t();
     {
-        std::set<size_t> queries;
+        std::unordered_set<size_t> queries;
         // get queries
         for (size_t i = 0; i < query_size; ++ i) {
             size_t res = commSync->commRecv_size_t();
@@ -165,8 +157,7 @@ bool RCDS_Synchronizer::SyncServer(const shared_ptr<Communicant> &commSync, list
     return success;
 }
 
-bool RCDS_Synchronizer::SyncClient(const shared_ptr<Communicant> &commSync, list<shared_ptr<DataObject>> &selfMinusOther,
-                                   list<shared_ptr<DataObject>> &otherMinusSelf, std::unordered_map<string, double> &CustomResult) {
+bool RCDS_Synchronizer::SyncClient(const shared_ptr<Communicant> &commSync) {
 
     Logger::gLog(Logger::METHOD, "Entering RCDS_Synchronizer::SyncClient");
     if (!useExistingConnection) {
@@ -196,11 +187,8 @@ bool RCDS_Synchronizer::SyncClient(const shared_ptr<Communicant> &commSync, list
         mbar = 1 << 10;
     }
 
-    // ------------------------- Sync hash shingles
-
-//    cout << "Client here." << endl;
-
     bool success = false;
+    list<shared_ptr<DataObject>> selfMinusOther, otherMinusSelf;
     size_t top_mbar = pow(2 * partition_num, level_num) * 2; // Upper bound on the number of symmetrical difference
     while (!success and mbar < top_mbar) { // if set recon failed, This can be caused by error rate and small mbar
         success = setReconClient(commSync, mbar, sizeof(shingle), setPointers, selfMinusOther, otherMinusSelf);
@@ -215,14 +203,8 @@ bool RCDS_Synchronizer::SyncClient(const shared_ptr<Communicant> &commSync, list
         mbar = 2 * (mbar + 1);
     }
 
-//    CustomResult["Partition Sym Diff"] = (selfMinusOther.size() +
-//                                          otherMinusSelf.size()); // recorder # symmetrical partition difference
-//    CustomResult["Total Num Partitions"] =
-//            (getNumofTreeNodes() - selfMinusOther.size()) * 2 + selfMinusOther.size() + otherMinusSelf.size();
-//    cout << "After Set Recon, we used comm bytes: " << commSync->getRecvBytesTot() + commSync->getXmitBytesTot() << endl;
-
     // before the query
-    prepare_querys(otherMinusSelf);
+    gen_queries(otherMinusSelf);
 
     // send queries
     commSync->commSend(cyc_query.size() + term_query.size());
@@ -233,20 +215,14 @@ bool RCDS_Synchronizer::SyncClient(const shared_ptr<Communicant> &commSync, list
     for (const auto& term: term_query)
         commSync->commSend(term.first);
 
-    size_t LiteralData = commSync->getRecvBytesTot() + commSync->getXmitBytesTot();
-
-    // two edge cases:
-    // 1: a partition can be not partitioned at an upper-level and partitioned at the next level.
-    // 2: a partition can be partitioned to terminal string size limit at an upper level and not be partitioned again later.
+    // add to dict
     for (int i = 0; i < term_query.size(); ++ i) {
         auto tmp = commSync->commRecv_string();
         if (tmp != "E") {
-            //
+            // non-empty string
             cyc_query.erase(add_str_to_dictionary(tmp));
         }
     }
-
-//    CustomResult["Literal comm"] = commSync->getRecvBytesTot() + commSync->getXmitBytesTot() - LiteralData;
 
     for (auto &cyc: cyc_query)
         cyc.second = ZZtoT<cycle>(commSync->commRecv_ZZ(sizeof(cycle)));
@@ -255,15 +231,33 @@ bool RCDS_Synchronizer::SyncClient(const shared_ptr<Communicant> &commSync, list
     if (!useExistingConnection)
         commSync->commClose();
 
+    // 处理elements, 加入oms, 去除smo(Server端暂时无此需求)
+    for (auto& oms: otherMinusSelf)
+        setPointers.emplace_back(move(oms));
+    RCDS_Synchronizer::delGroup(setPointers, selfMinusOther);
+
     return success;
 }
 
+bool RCDS_Synchronizer::recover_str(shared_ptr<DataObject>& recovered_str) {
+    hashShingleTree.clear();
+    hashShingleTree.resize(level_num);
+    for (const auto& s_zz : setPointers) {
+        shingle s = ZZtoT<shingle>(s_zz->to_ZZ());
+        hashShingleTree[s.level].insert(s);
+    }
+
+    data = retrieve_string();
+    recovered_str = make_shared<DataObject>(data);
+    return true;
+}
 
 vector<size_t> RCDS_Synchronizer::create_hash_vec(size_t str_hash, size_t space, size_t shingle_size) {
     vector<size_t> hash_val, hash_set;
     auto p = dict_geti(str_hash);
+    if (p.second == 0)
+        return hash_set;
     auto str = dict_getstr(str_hash);
-    if (p.second == 0) return hash_set;
     size_t win_size = floor((p.second / partition_num) / 2);
 
     // substring size should not smaller than terminal string size
@@ -296,14 +290,14 @@ vector<size_t> RCDS_Synchronizer::create_hash_vec(size_t str_hash, size_t space,
 
     // write it to cyc-dict
     auto cyc_it = cyc_dict.find(str_hash);
-    if (cyc_it == cyc_dict.end()) // check if cyc exists
+    if (cyc_it == cyc_dict.end()) // 当cyc[str_hash]对应的vector只有str_hash一个值时, 可以直接
         cyc_dict[str_hash] = hash_set; // update cyc_dict
-    // 当cyc[str_hash]对应的vector只有str_hash一个值时, 可以直接
-    // 否则不行
-    else if (cyc_it->second != hash_set and cyc_it->second.size() == 1 and cyc_it->second.front() == cyc_it->first)
-        cyc_dict[str_hash] = hash_set;// last stage no partition, update cyc_dict
-    else if (cyc_it->second != hash_set) // check if it is getting overwritten
-        Logger::error_and_quit("More than one answer is possible for cyc_dict");
+    else if (cyc_it->second != hash_set) {
+        if (cyc_it->second.size() == 1 and cyc_it->second.front() == cyc_it->first) // last stage no partition
+            cyc_dict[str_hash] = hash_set; // update cyc_dict
+        else // It is overwritten
+            Logger::error_and_quit("More than one answer is possible for cyc_dict");
+    }
 
     return hash_set;
 }
@@ -312,68 +306,47 @@ vector<size_t> RCDS_Synchronizer::create_hash_vec(size_t str_hash, size_t space,
 void RCDS_Synchronizer::go_through_tree() {
     hashShingleTree.clear(); // should be redundant
 
-    auto String_Size = pow(partition_num, level_num) *
-                       terminalStrSz; // calculate a supposed string size, a string size that make sense with the parameters
+    auto supposed_str_len = pow(partition_num, level_num) * terminalStrSz; // supposed string size
 
-    if (String_Size < 1)
+    if (supposed_str_len < 1)
         Logger::error_and_quit(
-                "fxn go_through_tree - parameters do not make sense - num of par: " + to_string(partition_num) +
-                ", num of lvls: " +
-                to_string(level_num) + ", Terminal String Size: " + to_string(terminalStrSz) + ", Actual String Size: " +
-                to_string(data.size()));
+                "Error params! level_num: " + to_string(level_num) + ", terminalStrSz: "
+                + to_string(terminalStrSz) + ", actual string size: " + to_string(data.size()));
 
-    size_t shingle_size = 2 * pow(shingle_sz,
-                                  level_num); //(Parameter c, terminal rolling hash window size)
+    size_t shingle_size = 2 * pow(shingle_sz, level_num); // size of window
     if (shingle_size < 1)
-        Logger::error_and_quit("Consider larger the parameters for auto shingle size to be more than 1");
-    size_t space = 4 * pow(space_sz, level_num); //126 for ascii content (Parameter terminal space)
+        Logger::error_and_quit("Shingle size cannot < 1!");
+    size_t space = 4 * pow(space_sz, level_num); // hash space
+
     vector<size_t> cur_level;
-    // fill up the tree
     hashShingleTree.resize(level_num);
 
-    // put up the first level
+    // level 0
     update_tree_shingles({add_i_to_dictionary(0, data.size())}, 0);
 
-/* ---------fixed hash value begin */
-//vector<size_t> hash_val;
-//            for (size_t i = 0; i < myString.size() - shingle_size + 1; ++i) {
-//            std::hash<std::string> shash;
-//            hash_val.push_back(shash(myString.substr(i, shingle_size)) % space);
-//        }
-//    hashcontent_dict[str_to_hash(myString)] = hash_val;
-/* ---------fixed hash value end */
-
-    // 对每一层进行遍历
-    for (int l = 1; l < level_num; ++l) {
-//        clock_t time = clock();
-        // Fill up Cycle Dictionary for non terminal strings
-        for (auto substr_hash:unique_substr_hash(hashShingleTree[l - 1])) {
-
+    // level [1, level_num)
+    for (int level = 1; level < level_num; ++ level) {
+        // get hash vec per level and update the corresponding level
+        for (auto substr_hash: unique_substr_hash(hashShingleTree[level - 1])) {
             cur_level = create_hash_vec(substr_hash, space, shingle_size);
-            update_tree_shingles(cur_level, l);
-
+            update_tree_shingles(cur_level, level);
         }
-//        cout << "time: " << (double) (clock() - time) / CLOCKS_PER_SEC << endl;
         space = floor(space / space_sz);
         shingle_size = floor(shingle_size / shingle_sz);
     }
-
 }
 
-
-// what i am missing, and what they would be sending to me
-void RCDS_Synchronizer::prepare_querys(list<shared_ptr<DataObject>> &otherMinusSelf) {
-
-    term_query.clear();// should be empty anyway
+void RCDS_Synchronizer::gen_queries(list<shared_ptr<DataObject>> &otherMinusSelf) {
+    term_query.clear();
     cyc_query.clear();
 
-    std::set<size_t> dup;// void duplicate (when a partition stay the same from upper level)
-
+    std::unordered_set<size_t> tmp;
     for (auto& shingle_zz: otherMinusSelf) {
         auto s = ZZtoT<shingle>(shingle_zz->to_ZZ());
-        if (dup.emplace(s.second).second)
-            cyc_query.erase(s.second); // if duplicated, we want the lower level
-        if (dictionary.find(s.second) == dictionary.end()) { // if it is not found anywhere
+        if (tmp.emplace(s.second).second) // lower level is preferred
+            cyc_query.erase(s.second);
+
+        if (dictionary.find(s.second) == dictionary.end()) { // cannot find in dict
             // shingle不是最后一层
             if (s.level < level_num - 1)
                 cyc_query.emplace(s.second, cycle{0, 0, 0});
@@ -382,40 +355,40 @@ void RCDS_Synchronizer::prepare_querys(list<shared_ptr<DataObject>> &otherMinusS
                 term_query.emplace(s.second, "");
         }
     }
-//    for(auto lvl : theirTree) for (auto shingle : lvl) cout<< shingle<<endl; // TODO: delete this print tree function
-
 }
 
-
-bool RCDS_Synchronizer::answer_queries(std::set<size_t> &theirQueries) {
+bool RCDS_Synchronizer::answer_queries(std::unordered_set<size_t> &queries) {
     cyc_concern.clear();
     term_concern.clear();
 
-    for (auto rit = hashShingleTree.rbegin(); rit != hashShingleTree.rend(); ++rit) { // search the tree from bottom up
+    // from bottom to top
+    for (auto rit = hashShingleTree.rbegin(); rit != hashShingleTree.rend(); ++ rit) {
         for (auto shingle : *rit) {
-            auto it = theirQueries.find(shingle.second);
-            if (it != theirQueries.end()) {
+            auto it = queries.find(shingle.second);
+            if (it != queries.end()) {
                 // shingle是最后一层
                 if (level_num - 1 == shingle.level)
                     term_concern.emplace(shingle.second, dict_getstr(shingle.second));
                 // 不是最后一层
                 else {
-                    vector<size_t> tmp_vec = cyc_dict[shingle.second];
+                    auto& tmp_vec = cyc_dict[shingle.second];
                     cycle tmp = cycle{.head = tmp_vec.front(), .len = (unsigned int) tmp_vec.size(), .cyc=0};
 
-                    if (!shingle2hash_train(tmp, hashShingleTree[shingle.level + 1], cyc_dict[shingle.second])) {
+                    if (shingle2hash_train(tmp, hashShingleTree[shingle.level + 1], cyc_dict[shingle.second]))
+                        cyc_concern[shingle.second] = tmp;
+                    else
                         continue;
-                    }
-                    cyc_concern[shingle.second] = tmp;
                 }
-                theirQueries.erase(it); // we solved it, then we get rid of it.
+
+                // if success, erase this query
+                queries.erase(it);
             }
         }
     }
-    return theirQueries.empty();
+    return queries.empty();
 }
 
-void RCDS_Synchronizer::update_tree_shingles(vector<size_t> hash_vector, uint16_t level) {
+void RCDS_Synchronizer::update_tree_shingles(const vector<size_t>& hash_vector, uint16_t level) {
     if (hashShingleTree.size() <= level)  Logger::error_and_quit("We have exceeded the levels of the tree");
     if (hash_vector.size() > 100)
         cout << "It is advised to not exceed 100 partitions for fast backtracking at Level: " + to_string(level) +
@@ -449,138 +422,6 @@ void RCDS_Synchronizer::update_tree_shingles(vector<size_t> hash_vector, uint16_
     }
 
 }
-
-// Backtracking using front ab dn back and cycle number
-//// functions for backtracking
-//bool RCDS_Synchronizer::shingle2hash_train(cycle& cyc_info, set<shingle_hash>& shingle_set, vector<size_t>& final_str) {
-//
-////    // edge case if there is only one shinlge in the set
-////    if (shingle_set.empty()) throw invalid_argument("Nothing is passed into shingle2hash_train");
-////
-////    if (shingle_set.size() == 1) {// edge case of just one shingle
-////        if (cyc_info.cyc == 0) {// we find cycle number
-////            cyc_info.cyc = 1;
-////            cout<<"shingle2hash_train, i should never happend"<<endl; // delete if proven tobe useless
-////            return true;
-////        } else { // we find string
-////            return true;
-////        }
-////    }
-//    auto changed_shingle_set = tree2shingle_dict(shingle_set); // get a shingle dict from a level of a tree for fast next edge lookup
-//
-//    if (changed_shingle_set.empty()) throw invalid_argument("the shingle_vec provided is empty for shingle2hash_train");
-//
-//    vector<map<size_t, vector<shingle_hash>>> stateStack;
-//    vector<vector<shingle_hash>> nxtEdgeStack;
-//    stateStack.push_back(changed_shingle_set);// Init Original state
-//    size_t strCollect_size = 0, curEdge =0;
-//    vector<size_t> str; // temprary string hash train to last be compared/placed in final_str
-//
-//
-//    for (auto head_shingles : changed_shingle_set[(size_t)0]) {
-//        if (cyc_info.head == head_shingles.second) {
-//            str.push_back(head_shingles.second);
-//            curEdge = head_shingles.second;
-//            break;
-//        }
-//    }
-//
-//
-//    if (cyc_info.cyc == 0) { // find head from "final_str" (we are finding cycle number)
-//        //if we only have one, then we are done with cycle number one and head ==tail
-//        if (final_str.size() == 1 && cyc_info.head == cyc_info.tail) {
-//            cyc_info.cyc = 1;
-//            final_str = str;
-//            return true;
-//        }
-//    } else if (cyc_info.cyc > 0) {// find head from "final_str" (we are retrieving the string from cycle number)
-//        if (cyc_info.cyc == 1 && cyc_info.head == cyc_info.tail) {
-//            final_str = str;
-//            return true;
-//        }
-//    }
-//    //    Resources initRes;
-////    initResources(initRes); // initiate Recourses tracking
-//
-//
-//    shingle_hash last_edge;
-//
-//    while (!stateStack.empty() and stateStack.size() == nxtEdgeStack.size() + 1) { // while state stack is not empty
-//        vector<shingle_hash> nxtEdges = stateStack.back()[curEdge];
-//
-//        if (!nxtEdges.empty()) { // If we can go further with this route
-//            last_edge = get_nxt_edge(curEdge, nxtEdges.back());
-//            nxtEdges.pop_back();
-//            nxtEdgeStack.push_back(nxtEdges);
-//        } else if (!nxtEdgeStack.empty() and stateStack.size() == nxtEdgeStack.size() + 1 and
-//                   !nxtEdgeStack.back().empty()) { //if this route is dead, we should look for other options
-//            if (!str.empty()) str.pop_back();
-//
-//            //look for other edge options
-//            last_edge = get_nxt_edge(curEdge, nxtEdgeStack.back().back());
-//            nxtEdgeStack.back().pop_back();
-//
-//            stateStack.pop_back();
-//            //(!stateStack.empty()) ? stateStack.push_back(stateStack.back()) : stateStack.push_back(origiState);
-//        } else if (!stateStack.empty() and stateStack.size() == nxtEdgeStack.size() + 1 and !nxtEdgeStack.empty() and
-//                   nxtEdgeStack.back().empty()) {// if this state is dead and we should look back a state
-//            if (!str.empty()) str.pop_back();
-//            // look back a state or multiple if we have empty nxt choice (unique nxt edge)
-//            while (!nxtEdgeStack.empty() and nxtEdgeStack.back().empty()) {
-//                nxtEdgeStack.pop_back();
-//                stateStack.pop_back();
-//                if (!str.empty()) str.pop_back();
-//            }
-//            if (nxtEdgeStack.empty()) {
-//                return false;
-//            } else if (!nxtEdgeStack.back().empty()) {
-//                last_edge = get_nxt_edge(curEdge, nxtEdgeStack.back().back());
-//                nxtEdgeStack.back().pop_back();
-//                stateStack.pop_back();
-//            }
-//        } else if (stateStack.size() != nxtEdgeStack.size() + 1) {
-//            throw invalid_argument("state stack and nxtEdge Stack size miss match" + to_string(stateStack.size())
-//                                   + ":" + to_string(nxtEdgeStack.size()));
-//        }
-//
-//        str.push_back(curEdge);
-//
-//        // Change and register our state for shingle occurrence and nxt edges
-//        stateStack.push_back(stateStack.back());
-//        for (auto &tmp_shingle: stateStack.back()[last_edge.first]) {
-//            if (tmp_shingle == last_edge) {
-//                tmp_shingle.occurr--;
-//                break;
-//            }
-//        }
-//
-//
-////
-////        if (!resourceMonitor( initRes, MAX_TIME, MAX_VM_SIZE))
-////            return false;
-//
-//        // if we reached a stop point
-//        if (curEdge == cyc_info.tail) {
-//            strCollect_size++;
-//            if (str == final_str || (strCollect_size == cyc_info.cyc and cyc_info.cyc != 0)) {
-//                cyc_info.cyc = strCollect_size;
-//                final_str = str;
-//            }
-//        }
-//
-//        if (strCollect_size == cyc_info.cyc && cyc_info.cyc != 0) {
-//            return true;
-//        }
-//    }
-//    return false;
-//}
-
-//bool RCDS_Synchronizer::empty_state(vector<shingle_hash> state) {
-//    for (shingle_hash item : state) {
-//        if (item.occurr > 0) return false;
-//    }
-//    return true;
-//}
 
 vector<shingle> RCDS_Synchronizer::get_nxt_shingle_vec(const size_t cur_edge,
                                                        const map<size_t, vector<shingle>> &last_state_stack,
@@ -816,17 +657,4 @@ void RCDS_Synchronizer::configure(shared_ptr<SyncMethod> &setHost, long mbar, si
         // 按test方法改了参数
 //        setHost = make_shared<ProbCPISync>(mbar, elem_size * 8, 64, true);
         setHost = make_shared<CPISync>(2 * UCHAR_MAX, elem_size * 8, 8, false);
-}
-
-bool RCDS_Synchronizer::reconstructString(shared_ptr<DataObject>&recovered_string, const vector<shared_ptr<DataObject>> &mySetData) {
-    hashShingleTree.clear();
-    hashShingleTree.resize(level_num);
-    for (auto s_zz : mySetData) {
-        shingle s = ZZtoT<shingle>(s_zz->to_ZZ());
-        hashShingleTree[s.level].insert(s);
-    }
-
-    data = retrieve_string();
-    recovered_string = make_shared<DataObject>(data);
-    return true;
 }

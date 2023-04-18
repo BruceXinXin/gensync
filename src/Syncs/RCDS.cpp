@@ -213,12 +213,10 @@ bool RCDS::string_server(const shared_ptr<Communicant> &commSync, const string& 
     {
         string content = scanTxtFromFile(filename, numeric_limits<int>::max());
         auto str = make_shared<DataObject>(content);
-        vector<shared_ptr<DataObject>> dummy;
-        stringHost.addStr(str, dummy);
+        stringHost.add_str(str);
     }
 
-    list<shared_ptr<DataObject>> selfMinusOther, otherMinusSelf;
-    stringHost.SyncServer(commSync, selfMinusOther, otherMinusSelf);
+    stringHost.SyncServer(commSync);
     return true;
 }
 
@@ -230,20 +228,14 @@ string RCDS::string_client(const shared_ptr<Communicant> &commSync, const string
     string content = scanTxtFromFile(filename, numeric_limits<int>::max());
 
     shared_ptr<DataObject> res, str = make_shared<DataObject>(content);
-    vector<shared_ptr<DataObject>> elements;
-    std::unordered_map<string, double> dummy;
     try {
-        stringHost.addStr(str, elements);
+        stringHost.add_str(str);
     } catch (std::exception &e) {
         // ignore exception
         cout << e.what() << endl;
     }
-    stringHost.SyncClient(commSync, selfMinusOther, otherMinusSelf, dummy);
-    // 处理elements, 加入oms, 去除smo(Server端暂时无此需求)
-    for (auto& oms: otherMinusSelf)
-        elements.emplace_back(move(oms));
-    RCDS_Synchronizer::delGroup(elements, selfMinusOther);
+    stringHost.SyncClient(commSync);
     // 重建字符串
-    stringHost.reconstructString(res, elements);
+    stringHost.recover_str(res);
     return res->to_string();
 }

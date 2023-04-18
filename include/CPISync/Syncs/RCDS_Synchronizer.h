@@ -8,6 +8,7 @@
 #include <vector>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <thread>
 #include <algorithm>
 #include <NTL/ZZ.h>
@@ -151,19 +152,15 @@ public:
     string retrieve_string();
 
     // add one string, should be called only once in one instance
-    bool addStr(shared_ptr<DataObject>& str, vector<shared_ptr<DataObject>> &datum);
+    bool add_str(shared_ptr<DataObject>& str);
 
-    bool SyncClient(const shared_ptr<Communicant> &commSync, list<shared_ptr<DataObject>> &selfMinusOther,
-                    list<shared_ptr<DataObject>> &otherMinusSelf, std::unordered_map<string, double> &CustomResult);
+    bool SyncClient(const shared_ptr<Communicant> &commSync);
 
-    bool SyncServer(const shared_ptr<Communicant> &commSync, list<shared_ptr<DataObject>> &selfMinusOther,
-                    list<shared_ptr<DataObject>> &otherMinusSelf);
+    bool SyncServer(const shared_ptr<Communicant> &commSync);
 
-    static string getName() { return "Sets of Content"; }
+    static string getName() { return "RCDS_Synchronizer"; }
 
-    // 因为取消了多态, 所以要把它变为public
-    // 为了适配vector, 从list改为了vector
-    bool reconstructString(shared_ptr<DataObject>&recovered_string, const vector<shared_ptr<DataObject>> &mySetData);
+    bool recover_str(shared_ptr<DataObject>& recovered_str);
 
 private:
     bool useExistingConnection; // if use existing connection
@@ -187,17 +184,29 @@ private:
     // should not use hashmap
     map<size_t, cycle> cyc_concern, cyc_query;
 
+private:
     /**
      * Create content dependent partitions based on the input string
      * Update Dictionary
-     * @param str origin string to be partitioned
-     * @param win_size partition size is 2 * win_size
+     * @param str_hash the hash of the string
      * @param space smaller-more partitions(hash space 论文有)
      * @param shingle_size inter-relation of the string
      * @return vector of substring hashes in origin string order
      */
     vector<size_t> create_hash_vec(size_t str_hash, size_t space = 0, size_t shingle_size = 0);
 
+    // 每一层使用update_tree_shingles更新一遍(包括第0层, 即整个字符串)
+    void go_through_tree();
+
+    /**
+     * Generate queries
+     * @param otherMinusSelf
+     */
+    // 我没有的对方有的
+    void gen_queries(list<shared_ptr<DataObject>> &otherMinusSelf);
+
+    // 回答对方的query
+    bool answer_queries(std::unordered_set<size_t> &queries);
 
     /**
      * Insert string into dictionary
@@ -207,23 +216,15 @@ private:
      */
     // 直接传入字符串进去
     size_t add_str_to_dictionary(const string &str) {
-//        size_t hash = str_to_hash(str);
         size_t hash = std::hash<string>()(str);
         dictionary.emplace(hash, make_pair(str, make_pair(0, 0)));
-//        if (!it.second and str != it.first->second.first and
-//            str != myString.substr(it.first->second.second.first, it.first->second.second.second))
-//            throw invalid_argument("Dictionary duplicated suggest using new/multiple hash functions");
         return hash;
     };
 
     // 通过索引放子字符串进去
     size_t add_i_to_dictionary(size_t start_i, size_t len) {
-//        size_t hash = str_to_hash(myString.substr(start_i, len));
         size_t hash = std::hash<string>()(data.substr(start_i, len));
         dictionary.emplace(hash, make_pair("", make_pair(start_i, len)));
-//        if (!it.second and myString.substr(it.first->second.second.first, it.first->second.second.second) != myString.substr(start_i, len) and
-//            it.first->second.first != myString.substr(start_i, len))
-//            throw invalid_argument("Dictionary duplicated suggest using new/multiple hash functions");
         return hash;
     };
 
@@ -233,39 +234,38 @@ private:
         if (it != dictionary.end()) {
             if (it->second.first.empty() and it->second.second.second != 0)
                 return data.substr(it->second.second.first, it->second.second.second);
-            else return it->second.first;
+            else
+                return it->second.first;
         }
         return "";
     }
 
     // only available for local substrings
-    // use it in partition tree construction
     // 返回对应的pair
     pair<size_t, size_t> dict_geti(size_t hash) {
         auto it = dictionary.find(hash);
-        if (it != dictionary.end()) return it->second.second;
+        if (it != dictionary.end())
+            return it->second.second;
 
-        return make_pair(0, 0);
+        return {0, 0};
     }
 
-    // extract the unique substring hashes from the shingle_hash vector
-    // 从一堆shingle_hash中得到去重的字符串哈希值
-    vector<size_t> unique_substr_hash(std::set<shingle> hash_set) {
+    // 从一堆shingle_hash中得到去重的字符串哈希值, 返回值需要有序
+    static vector<size_t> unique_substr_hash(std::set<shingle>& hash_set) {
         std::set<size_t> tmp;
-        for (shingle item : hash_set) {
+        for (const shingle& item : hash_set) {
             tmp.insert(item.first);
             tmp.insert(item.second);
         }
         return vector<size_t>(tmp.begin(), tmp.end());
-
     }
 
     // 使用提供的hash_vector, 将shingles写到树的某一层中
-    void update_tree_shingles(vector<size_t> hash_vector, uint16_t level);
+    void update_tree_shingles(const vector<size_t>& hash_vector, uint16_t level);
 
     // getting the poteintial list of next shingles
     vector<shingle>
-    get_nxt_shingle_vec(const size_t cur_edge, const map<size_t, vector<shingle>> &last_state_stack,
+    get_nxt_shingle_vec(size_t cur_edge, const map<size_t, vector<shingle>> &last_state_stack,
                         const map<size_t, vector<shingle>> &original_state_stack);
 
     // functions for backtracking
@@ -284,26 +284,7 @@ private:
     // 返回原来的shingle, current_edge更新为shingle的second
     shingle get_nxt_edge(size_t &current_edge, shingle _shingle);
 
-    /**
-     *
-     * @param shingle_hash_theirs
-     * @param shingle_hash_mine
-     * @param groupIDs
-     * @return hashes of unknown
-     */
-    // 我没有的对方有的
-    void prepare_querys(list<shared_ptr<DataObject>> &shingle_hash_theirs);
-
-//    void prepare_concerns(const vector<shingle_hash> &shingle_hash_theirs, const vector<shingle_hash> &shingle_hash_mine);
-
-    // 回答对方的query
-    bool answer_queries(std::set<size_t> &theirQueries);
-
-    // 每一层使用update_tree_shingles更新一遍(包括第0层, 即整个字符串)
-    void go_through_tree();
-
     // functions for Sync Methods
-
 
     //Get fuzzy_shingle in ZZ O(n*log^2(n))
     // 获取myTree中去重的ZZ值

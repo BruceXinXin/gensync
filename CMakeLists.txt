@@ -75,7 +75,7 @@ set(SOURCE_FILES
         ${SYNC_DIR}/FullSync.cpp
         ${SYNC_DIR}/TrivialSync.cpp
         ${SYNC_DIR}/RCDS.cpp
-        ${SYNC_DIR}/SetOfContent.cpp
+        ${SYNC_DIR}/RCDS_Synchronizer.cpp
         ${SYNC_DIR}/StrataEst.cpp
 
         ${BENCH_DIR}/Runner.cpp
@@ -132,7 +132,7 @@ set(HEADERS
         ${SYNC_DIR_INC}/ProbCPISync.h
         ${SYNC_DIR_INC}/TrivialSync.h
         ${SYNC_DIR_INC}/RCDS.h
-        ${SYNC_DIR_INC}/SetOfContent.h
+        ${SYNC_DIR_INC}/RCDS_Synchronizer.h
         ${SYNC_DIR_INC}/StrataEst.h
 
         ${SYNC_BENCH_INC}/BenchObserv.h
