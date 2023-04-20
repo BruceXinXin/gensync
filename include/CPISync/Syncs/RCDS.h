@@ -35,13 +35,6 @@ public:
 
     ~RCDS() = default;
 
-    /**
-     * Init a folder
-     * @param str
-     * @param datum
-     * @param sync
-     * @return
-     */
     void addStr(shared_ptr<DataObject>& str); // add folder or file location
 
     bool SyncClient(const shared_ptr<Communicant> &commSync, list<shared_ptr<DataObject>> &selfMinusOther,

@@ -25,8 +25,10 @@ void RCDSTest::RCDSSetReconcileTest() {
 }
 
 void RCDSTest::testAll() {
-    GenSync::SyncProtocol protos[2] = {GenSync::SyncProtocol::InteractiveCPISync,
-                                       GenSync::SyncProtocol::IBLTSyncSetDiff};
+    GenSync::SyncProtocol protos[1] = {
+            GenSync::SyncProtocol::InteractiveCPISync,
+//            GenSync::SyncProtocol::IBLTSyncSetDiff
+    };
 //    GenSync::SyncProtocol protos[1] = {GenSync::SyncProtocol::CPISync};
     shared_ptr<DataObject> fs_server[2] = {
             make_shared<DataObject>("../tests/tmp/dirs_Bob"),

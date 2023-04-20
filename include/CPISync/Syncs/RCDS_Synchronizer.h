@@ -21,25 +21,22 @@
 #include <CPISync/Data/DataObject.h>
 #include <CPISync/Syncs/GenSync.h>
 
-#include "StrataEst.h"
+//#include "StrataEst.h"
 #include "InterCPISync.h"
 #include "IBLTSync_SetDiff.h"
 #include "ProbCPISync.h"
 #include "FullSync.h"
-
 
 using std::vector;
 using std::hash;
 using std::string;
 using namespace NTL;
 
-//typedef unsigned short sm_i; // small index for lvl, MAX = 65,535 which is terminal string size * partition^lvl = file string size
-
 // A cycle structure, inspired by Bowen's Go implementation
 struct cycle {
     size_t head;
     uint32_t len;
-    uint32_t cyc;
+    uint32_t cyc; // cycle number
 
     friend bool operator==(const cycle &a, const cycle &b) {
         return a.head == b.head and a.len == b.len and a.cyc == b.cyc;
@@ -107,19 +104,22 @@ static vector<size_t> get_local_mins(const vector<size_t> &hash_val, size_t win_
     // i为窗口中心
     for (size_t i = win_size; i < hash_val.size() - win_size; ++ i) {
         // smaller than smallest hash && bigger than one window
-        if (hash_val[i] <= hash_occur_cnt.begin()->first && ((mins.empty()) ? i : i - mins.back()) > win_size)
+        if (hash_val[i] <= hash_occur_cnt.begin()->first && ((mins.empty())? i : i - mins.back()) > win_size)
             mins.push_back(i);
 
         // 在最后一次循环跳出, 不然下一句会超出索引
-        if (i + win_size + 1 == hash_val.size()) break;
+        if (i + win_size + 1 == hash_val.size())
+            break;
 
         // 窗口最左边跟窗口最右边的右边的哈希值一样, 可以跳过删除最左边和插入最右边
-        if (hash_val[i - win_size] == hash_val[i + win_size + 1]) continue;
+        if (hash_val[i - win_size] == hash_val[i + win_size + 1])
+            continue;
 
         // 找窗口最左边的hash, 找到则计数减一或删去
         auto it_prev = hash_occur_cnt.find(hash_val[i - win_size]);
         if (it_prev != hash_occur_cnt.end()) {
-            if (it_prev->second > 1) it_prev->second--;
+            if (it_prev->second > 1)
+                -- it_prev->second;
             else hash_occur_cnt.erase(it_prev);
         }
 
@@ -139,8 +139,8 @@ public:
                       size_t shingle_size = 2, size_t ter_space = 8);
 
     RCDS_Synchronizer(GenSync::SyncProtocol base_set_proto, size_t levels, size_t partition, size_t terminal_str_size = 10)
-            : terminalStrSz(terminal_str_size), level_num(levels), partition_num(partition),
-              baseSyncProtocol(base_set_proto) {
+            : terminal_str_size(terminal_str_size), level_num(levels), partition_num(partition),
+              base_sync_protocol(base_set_proto) {
         useExistingConnection = true;
         shingle_sz = 2;
         space_sz = 8;
@@ -166,15 +166,16 @@ private:
     bool useExistingConnection; // if use existing connection
 
     string data; // original data
-    size_t terminalStrSz, level_num, partition_num, shingle_sz, space_sz;
+    size_t terminal_str_size, level_num, partition_num, shingle_sz, space_sz;
 
-    GenSync::SyncProtocol baseSyncProtocol;
+    GenSync::SyncProtocol base_sync_protocol;
 
-    vector<shared_ptr<DataObject>> setPointers; // garbage collector
+    vector<shared_ptr<DataObject>> set_pointers; // garbage collector
 
-    vector<std::set<shingle>> hashShingleTree; // hash shingle tree
+    vector<std::set<shingle>> hash_shingle_tree; // hash shingle tree
 
-    map<size_t, pair<string, pair<size_t, size_t>>> dictionary;  // dictionary strings
+    // hash -> (string, (start_idx, len))
+    unordered_map<size_t, pair<string, pair<size_t, size_t>>> dictionary;  // dictionary strings
 
     // origin, cycle information to reform this string rep
     unordered_map<size_t, vector<size_t>> cyc_dict; // has to be unique
@@ -196,40 +197,69 @@ private:
     vector<size_t> create_hash_vec(size_t str_hash, size_t space = 0, size_t shingle_size = 0);
 
     // 每一层使用update_tree_shingles更新一遍(包括第0层, 即整个字符串)
-    void go_through_tree();
+    void init_tree_by_string_data();
 
     /**
      * Generate queries
      * @param otherMinusSelf
      */
     // 我没有的对方有的
-    void gen_queries(list<shared_ptr<DataObject>> &otherMinusSelf);
+    void gen_queries(const list<shared_ptr<DataObject>> &otherMinusSelf);
 
     // 回答对方的query
     bool answer_queries(std::unordered_set<size_t> &queries);
 
+    // 使用提供的hash_vector, 将shingles写到树的某一层中
+    // shingle是{a点，b点，层数编号，出现次数}，a到b有连接
+    void update_tree_shingles_by_level(const vector<size_t>& hash_vector, uint16_t level);
+
+    // 得到所有可能的下一个shingle
+    static vector<shingle> potential_next_shingles(size_t edge,
+                                            const map<size_t, vector<shingle>> &cur,
+                                            const map<size_t, vector<shingle>> &org);
+
+    /**
+     * shingle_hashes back to a vector of hashes in the string order
+     * @param tree_level
+     * @param str_order
+     * @param hashes_vec a hash train in string order
+     */
+     // 将shingle_set唯一地转化为子字符串的hashes
+    bool shingles_to_substr_hashes(cycle &cyc_info, int level, vector<size_t> &hashes_vec) const;
+
+    // 树 转化为 shingle.first->shingles, 并对shingles排序
+    std::map<size_t, vector<shingle>> tree_level_to_shingle_dict(int level) const;
+
+//    // 返回原来的shingle, current_edge更新为shingle的second
+//    shingle get_nxt_edge(size_t &current_edge, shingle _shingle);
+//    size_t get_next_edge(const shingle& shingle);
+
+    void send_sync_param(const shared_ptr<Communicant> &commSync) const;
+
+    void recv_sync_param(const shared_ptr<Communicant> &commSync) const;
+
+    void configure(shared_ptr<SyncMethod> &setHost, long mbar, size_t elem_size);
+
     /**
      * Insert string into dictionary
      * @param str a substring
-     * @return hash of the string
-     * @throw if there is duplicates, suggest using new/multiple hash functions
      */
     // 直接传入字符串进去
-    size_t add_str_to_dictionary(const string &str) {
+    size_t add_str_to_dict(const string &str) {
         size_t hash = std::hash<string>()(str);
         dictionary.emplace(hash, make_pair(str, make_pair(0, 0)));
         return hash;
     };
 
     // 通过索引放子字符串进去
-    size_t add_i_to_dictionary(size_t start_i, size_t len) {
-        size_t hash = std::hash<string>()(data.substr(start_i, len));
-        dictionary.emplace(hash, make_pair("", make_pair(start_i, len)));
+    size_t add_str_to_dict_by_idx_len(size_t idx, size_t len) {
+        size_t hash = std::hash<string>()(data.substr(idx, len));
+        dictionary.emplace(hash, make_pair("", make_pair(idx, len)));
         return hash;
     };
 
     // 通过哈希找字符串
-    string dict_getstr(size_t hash) {
+    string find_str_from_dict_by_hash(size_t hash) {
         auto it = dictionary.find(hash);
         if (it != dictionary.end()) {
             if (it->second.first.empty() and it->second.second.second != 0)
@@ -242,7 +272,7 @@ private:
 
     // only available for local substrings
     // 返回对应的pair
-    pair<size_t, size_t> dict_geti(size_t hash) {
+    pair<size_t, size_t> get_idx_len_by_hash(size_t hash) {
         auto it = dictionary.find(hash);
         if (it != dictionary.end())
             return it->second.second;
@@ -251,7 +281,7 @@ private:
     }
 
     // 从一堆shingle_hash中得到去重的字符串哈希值, 返回值需要有序
-    static vector<size_t> unique_substr_hash(std::set<shingle>& hash_set) {
+    static vector<size_t> get_unique_hashes_from_shingles(const std::set<shingle>& hash_set) {
         std::set<size_t> tmp;
         for (const shingle& item : hash_set) {
             tmp.insert(item.first);
@@ -260,133 +290,28 @@ private:
         return vector<size_t>(tmp.begin(), tmp.end());
     }
 
-    // 使用提供的hash_vector, 将shingles写到树的某一层中
-    void update_tree_shingles(const vector<size_t>& hash_vector, uint16_t level);
-
-    // getting the poteintial list of next shingles
-    vector<shingle>
-    get_nxt_shingle_vec(size_t cur_edge, const map<size_t, vector<shingle>> &last_state_stack,
-                        const map<size_t, vector<shingle>> &original_state_stack);
-
-    // functions for backtracking
-    /**
-     * peice shingle_hashes back to a vector of hashes in the string order
-     * @param shingle_set
-     * @param str_order
-     * @param final_str a hash train in string order
-     */
-     // 将shingle_set唯一地转化为字符串
-    bool shingle2hash_train(cycle &cyc_info, const std::set<shingle> &shingle_set, vector<size_t> &final_str);
-
-    // 树 转化为 shingle.first->shingles, 并对shingles排序
-    std::map<size_t, vector<shingle>> tree2shingle_dict(const std::set<shingle> &tree_lvl);
-
-    // 返回原来的shingle, current_edge更新为shingle的second
-    shingle get_nxt_edge(size_t &current_edge, shingle _shingle);
-
-    // functions for Sync Methods
-
-    //Get fuzzy_shingle in ZZ O(n*log^2(n))
     // 获取myTree中去重的ZZ值
-    vector<ZZ> getHashShingles_ZZ() {
+    vector<ZZ> get_unique_shingleZZs_from_tree() {
         std::set<ZZ> res;
-        for (auto& treelvl : hashShingleTree) {
-            for (auto item:treelvl) {
+        for (const auto& tree_level: hash_shingle_tree) {
+            for (const auto& item: tree_level)
                 res.emplace(TtoZZ(item));
-            }
         }
-        return vector<ZZ>{res.begin(), res.end()};
+        return { res.begin(), res.end() };
     };
-
-    // 获取myTree中的数量
-    size_t getNumofTreeNodes() {
-        size_t
-                num_treenodes = 0;
-        for (auto& lvl : hashShingleTree) num_treenodes += lvl.size();
-        return num_treenodes;
-    }
-
-    void SendSyncParam(const shared_ptr<Communicant> &commSync, bool oneWay = false);
-
-    void RecvSyncParam(const shared_ptr<Communicant> &commSync, bool oneWay = false);
-
-    void configure(shared_ptr<SyncMethod> &setHost, long mbar, size_t elem_size);
 
     bool setReconClient(const shared_ptr<Communicant> &commSync, long mbar, size_t elem_size,
-                        vector<shared_ptr<DataObject>> &full_set, list<shared_ptr<DataObject>> &selfMinusOther,
-                        list<shared_ptr<DataObject>> &otherMinusSelf) {
-        selfMinusOther.clear();
-        otherMinusSelf.clear();
-//        cout << "Client Size: " << full_set.size();
-        shared_ptr<SyncMethod> setHost;
-        // 取消多态, 抽出这句有用的出来
-        commSync->resetCommCounters();
-//        SyncMethod::SyncClient(commSync, selfMinusOther, otherMinusSelf);
-        configure(setHost, mbar, elem_size);
-        for (auto& dop : full_set) {
-            setHost->addElem(dop); // Add to GenSync
-        }
-        bool success = setHost->SyncClient(commSync, selfMinusOther, otherMinusSelf);
-//        if (not SyncMethod::delGroup(full_set, selfMinusOther))
-        if (not delGroup(full_set, selfMinusOther))
-            Logger::error_and_quit("We failed to delete some set elements");
-        for (auto item : otherMinusSelf)
-            full_set.push_back(item);
-
-//        cout << " with sym Diff: " << selfMinusOther.size() + otherMinusSelf.size() << " After Sync at : "
-//             << full_set.size() << endl;
-
-        return success;
-    };
+                        list<shared_ptr<DataObject>> &selfMinusOther, list<shared_ptr<DataObject>> &otherMinusSelf);
 
     bool setReconServer(const shared_ptr<Communicant> &commSync, long mbar, size_t elem_size,
-                        vector<shared_ptr<DataObject>> &full_set, list<shared_ptr<DataObject>> &selfMinusOther,
-                        list<shared_ptr<DataObject>> &otherMinusSelf) {
-        selfMinusOther.clear();
-        otherMinusSelf.clear();
-//        cout << "Server Size: " << full_set.size();
-        shared_ptr<SyncMethod> setHost;
-        // 取消多态, 抽出这句有用的出来
-        commSync->resetCommCounters();
-//        SyncMethod::SyncServer(commSync, selfMinusOther, otherMinusSelf);
-        configure(setHost, mbar, elem_size);
-        for (auto& dop : full_set) {
-            setHost->addElem(dop); // Add to GenSync
-        }
-        return setHost->SyncServer(commSync, selfMinusOther, otherMinusSelf);
+                        list<shared_ptr<DataObject>> &selfMinusOther, list<shared_ptr<DataObject>> &otherMinusSelf);
 
-//        cout << " with sym Diff: " << selfMinusOther.size() + otherMinusSelf.size() << " After Sync at : "
-//             << full_set.size() << endl;
-    };
-
-public:
     /**
-     * @author Bruce Xin
-     * Get rid of del list from a group in O(d+nlgd+(d))
-     * 也给外部用的工具方法
-     * @param itemGroup n num of elem
-     * @param delList d num of elem
+     * @param to_del elements to delete
      * @param destroy Destructively delete all delList
      * @return
      */
-    static bool delGroup(vector<shared_ptr<DataObject>> &itemGroup, list<shared_ptr<DataObject>> &delList) {
-
-        // d+nlgd
-        std::set<ZZ> delMap;
-        for (auto& item : delList)
-            delMap.insert(item->to_ZZ());
-
-        auto it = itemGroup.begin();
-        while (it != itemGroup.end()) {
-            auto delit = delMap.find((*it)->to_ZZ());
-            if (delit != delMap.end()) {
-                it = itemGroup.erase(it); // delete the current and move to the next
-                delMap.erase(delit);
-            } else it++;
-        }
-
-        return (delMap.size() == 0);
-    }
+    bool del_elements_from_set_pointers(const list<shared_ptr<DataObject>> &to_del);
 };
 
 #endif //CPISYNC_RCDS_SYNCHRONIZER_H
