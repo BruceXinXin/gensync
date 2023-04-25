@@ -42,19 +42,21 @@ void RCDSTest::testAll() {
             make_shared<DataObject>("../tests/tmp/dirs_Alice_Org"),
             make_shared<DataObject>("../tests/tmp/dirs_A_Org/Sync.txt")
     };
-    std::multiset<string> reconciled[2] = {
+    std::vector<string> reconciled[2] = {
             {},
             {scanTxtFromFile(fs_server[1]->to_string(), numeric_limits<int>::max())}
     };
 
-    for (const string &f_name : walkRelDir(fs_server[0]->to_string()))
-        reconciled[0].insert( scanTxtFromFile(fs_server[0]->to_string() + "/" + f_name, numeric_limits<int>::max()) );
+    auto f_name_list = walkRelDir(fs_server[0]->to_string());
+    for (const string &f_name : f_name_list)
+        reconciled[0].push_back( scanTxtFromFile(fs_server[0]->to_string() + "/" + f_name, numeric_limits<int>::max()) );
 
 //    fstream fs;
 //    fs << system("pwd") << endl;
 
     for (auto proto: protos)
 //        for (int i = 0; i < 2; ++ i) {
+        // FIXME: just for debug, change back to i = 1
         for (int i = 1; i >= 0; -- i) {
             GenSync GenSyncServer = GenSync::Builder().
                     setProtocol(GenSync::SyncProtocol::RCDS).
@@ -92,7 +94,7 @@ void RCDSTest::testAll() {
             else {
                 bool res = true;
                 auto iter = reconciled[i].begin();
-                for (const string &f_name : walkRelDir(filename_client)) {
+                for (const string &f_name : f_name_list) {
                     res &= (scanTxtFromFile(fs_client[i]->to_string() + "/" + f_name, numeric_limits<int>::max()) == *iter);
                     ++ iter;
 
