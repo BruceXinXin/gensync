@@ -352,7 +352,6 @@ private:
         return {0, 0};
     }
 
-    // 从一堆shingle_hash中得到去重的字符串哈希值, 返回值需要有序
     /**
      * Return multiple shingles' hash values
      * @param set multiple shingles
@@ -367,7 +366,6 @@ private:
         return vector<size_t>(tmp.begin(), tmp.end());
     }
 
-    // 获取myTree中去重的ZZ值
     /**
      * Get unique shingles from hash shingle tree.
      */
