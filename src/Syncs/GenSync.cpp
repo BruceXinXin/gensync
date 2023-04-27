@@ -527,21 +527,21 @@ GenSync GenSync::Builder::build() {
             break;
         case SyncProtocol::RCDS:
             {
-                shared_ptr<Communicant> newComm{};
-                switch (comm) {
-                    case SyncComm::socket:
-                        newComm = make_shared<CommSocket>(port + 2, host);
-                        Logger::gLog(Logger::METHOD, "Connecting to host " + host + " on port " + toStr(port + 2));
-                        break;
-                    case SyncComm::string:
-                        newComm = make_shared<CommString>(ioStr, base64);
-                        Logger::gLog(Logger::METHOD, "Connecting to " + toStr(base64 ? "base64" : "") + " string " + ioStr);
-                        break;
-                    default:
-                        throw invalid_argument(
-                                "I don't know how to set up communication through the provided requested mode.");
-                }
-                myMeth = make_shared<RCDS>(RCDS_proto, newComm);
+//                shared_ptr<Communicant> newComm{};
+//                switch (comm) {
+//                    case SyncComm::socket:
+//                        newComm = make_shared<CommSocket>(port + 2, host);
+//                        Logger::gLog(Logger::METHOD, "Connecting to host " + host + " on port " + toStr(port + 2));
+//                        break;
+//                    case SyncComm::string:
+//                        newComm = make_shared<CommString>(ioStr, base64);
+//                        Logger::gLog(Logger::METHOD, "Connecting to " + toStr(base64 ? "base64" : "") + " string " + ioStr);
+//                        break;
+//                    default:
+//                        throw invalid_argument(
+//                                "I don't know how to set up communication through the provided requested mode.");
+//                }
+                myMeth = make_shared<RCDS>(RCDS_proto);
             }
             break;
         default:

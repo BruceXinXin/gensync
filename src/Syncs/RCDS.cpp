@@ -57,7 +57,7 @@ bool RCDS_Synchronizer::SyncServer(const shared_ptr<Communicant> &commSync) {
         // If failed, try bigger mbar, inspired by Bowen
         list<shared_ptr<DataObject>> selfMinusOther, otherMinusSelf;
         while (!success && mbar < top_mbar) {
-            success = sync_set_pointers_server(commSync, mbar, sizeof(shingle), selfMinusOther, otherMinusSelf);
+            success = sync_tree_shingles_server(commSync, mbar, sizeof(shingle), selfMinusOther, otherMinusSelf);
             success &= (SYNC_SUCCESS == commSync->commRecv_int());
             commSync->commSend(success? SYNC_SUCCESS: SYNC_FAILURE);
 //            if (success || GenSync::SyncProtocol::IBLTSyncSetDiff != base_sync_protocol)
@@ -124,7 +124,7 @@ bool RCDS_Synchronizer::SyncClient(const shared_ptr<Communicant> &commSync) {
     list<shared_ptr<DataObject>> selfMinusOther, otherMinusSelf;
     size_t top_mbar = pow(2 * partition_num, level_num) * 2; // Upper bound on the number of symmetrical difference
     while (!success and mbar < top_mbar) { // if set recon failed, This can be caused by error rate and small mbar
-        success = sync_set_pointers_client(commSync, mbar, sizeof(shingle), selfMinusOther, otherMinusSelf);
+        success = sync_tree_shingles_client(commSync, mbar, sizeof(shingle), selfMinusOther, otherMinusSelf);
         commSync->commSend(success? SYNC_SUCCESS: SYNC_FAILURE);
         success &= (SYNC_SUCCESS == commSync->commRecv_int());
 //        if (success || GenSync::SyncProtocol::IBLTSyncSetDiff != base_sync_protocol)
@@ -570,10 +570,6 @@ std::map<size_t, vector<shingle>> RCDS_Synchronizer::tree_level_to_shingle_dict(
     return res;
 }
 
-//size_t RCDS_Synchronizer::get_next_edge(const shingle &shingle) {
-//    return shingle.second;
-//}
-
 
 void RCDS_Synchronizer::send_sync_param(const shared_ptr<Communicant> &commSync) const {
     Logger::gLog(Logger::METHOD, "Entering SendSyncParam::send_sync_param");
@@ -616,8 +612,8 @@ void RCDS_Synchronizer::configure(shared_ptr<SyncMethod> &setHost, long mbar, si
 //        setHost = make_shared<CPISync>(2 * UCHAR_MAX, elem_size * 8, 8, false);
 }
 
-bool RCDS_Synchronizer::sync_set_pointers_client(const shared_ptr<Communicant> &commSync, long mbar, size_t elem_size,
-                                                 list<shared_ptr<DataObject>> &selfMinusOther, list<shared_ptr<DataObject>> &otherMinusSelf) {
+bool RCDS_Synchronizer::sync_tree_shingles_client(const shared_ptr<Communicant> &commSync, long mbar, size_t elem_size,
+                                                  list<shared_ptr<DataObject>> &selfMinusOther, list<shared_ptr<DataObject>> &otherMinusSelf) {
     selfMinusOther.clear();
     otherMinusSelf.clear();
     shared_ptr<SyncMethod> setHost;
@@ -636,8 +632,8 @@ bool RCDS_Synchronizer::sync_set_pointers_client(const shared_ptr<Communicant> &
     return success;
 }
 
-bool RCDS_Synchronizer::sync_set_pointers_server(const shared_ptr<Communicant> &commSync, long mbar, size_t elem_size,
-                                                 list<shared_ptr<DataObject>> &selfMinusOther, list<shared_ptr<DataObject>> &otherMinusSelf) {
+bool RCDS_Synchronizer::sync_tree_shingles_server(const shared_ptr<Communicant> &commSync, long mbar, size_t elem_size,
+                                                  list<shared_ptr<DataObject>> &selfMinusOther, list<shared_ptr<DataObject>> &otherMinusSelf) {
     selfMinusOther.clear();
     otherMinusSelf.clear();
     shared_ptr<SyncMethod> setHost;
@@ -717,37 +713,12 @@ vector<size_t> RCDS_Synchronizer::get_local_mins(const vector<size_t> &hash_val,
 }
 
 
-RCDS::RCDS(GenSync::SyncProtocol RCDS_base_proto, shared_ptr<Communicant>& newComm, size_t terminal_str_size, size_t levels, size_t partition)
-        : m_RCDS_base_proto(RCDS_base_proto), newCommunicant(newComm), m_termStrSize(terminal_str_size), m_levels(levels), m_partition(partition) {
+RCDS::RCDS(GenSync::SyncProtocol RCDS_base_proto, size_t terminal_str_size, size_t levels, size_t partition)
+        : m_RCDS_base_proto(RCDS_base_proto), m_terminal_str_size(terminal_str_size), m_levels(levels), m_partition(partition) {
 
     // 多文件模式下不会调用Client的addStr, 也就不会更新这个标志, 先置位单文件模式为false
     m_single_file_mode = false;
     m_save_file = true;
-}
-
-// 把文件名字符串以DataObject形式放入setPointers(同时更新了FolderName), 并判断是否是singleFileMode
-void RCDS::addStr(shared_ptr<DataObject>& str) {
-    // 不允许多个文件夹
-    string tmp = str->to_string();
-    if (!m_folder_name.empty()) {
-        if (m_folder_name != tmp)
-            Logger::error_and_quit("Syncing multiple folders is not supported!");
-    }
-    else
-        m_folder_name = tmp;
-    if (m_folder_name.empty())
-        Logger::error_and_quit("Folder name cannot be empty!");
-
-    if (!isFile((m_folder_name))) {
-        while (!m_folder_name.empty() && m_folder_name.back() == '/')
-            m_folder_name.pop_back();
-        for (const string &f_name : walkRelDir(m_folder_name))
-            m_filenames.push_back(make_shared<DataObject>(f_name));
-        m_single_file_mode = false;
-    } else {
-        m_filenames.push_back(make_shared<DataObject>(m_folder_name));
-        m_single_file_mode = true;
-    }
 }
 
 bool RCDS::addElem(shared_ptr<DataObject> newDatum) {
@@ -757,6 +728,31 @@ bool RCDS::addElem(shared_ptr<DataObject> newDatum) {
     addStr(newDatum);
     Logger::gLog(Logger::METHOD, "Successfully added shared_ptr<DataObject> {" + newDatum->print() + "}");
     return true;
+}
+
+// 把文件名字符串以DataObject形式放入setPointers(同时更新了FolderName), 并判断是否是singleFileMode
+void RCDS::addStr(shared_ptr<DataObject>& str) {
+    // 不允许多个文件夹
+    string tmp = str->to_string();
+    if (!m_target.empty()) {
+        if (m_target != tmp)
+            Logger::error_and_quit("Syncing multiple folders is not supported!");
+    }
+    else
+        m_target = tmp;
+    if (m_target.empty())
+        Logger::error_and_quit("Folder name cannot be empty!");
+
+    if (!isFile((m_target))) {
+        while (!m_target.empty() && m_target.back() == '/')
+            m_target.pop_back();
+        for (const string &f_name : walkRelDir(m_target))
+            m_filenames.push_back(make_shared<DataObject>(f_name));
+        m_single_file_mode = false;
+    } else {
+        m_filenames.push_back(make_shared<DataObject>(m_target));
+        m_single_file_mode = true;
+    }
 }
 
 bool RCDS::SyncServer(const shared_ptr<Communicant> &commSync, list<shared_ptr<DataObject>> &selfMinusOther,
@@ -774,13 +770,13 @@ bool RCDS::SyncServer(const shared_ptr<Communicant> &commSync, list<shared_ptr<D
     // 单文件模式必须在Sync之前就写好双方的FolderName, 多文件模式可以只写服务端的FolderName
     if (m_single_file_mode) {
         Logger::gLog(Logger::METHOD, "We use RCDS.");
-        int levels = floor(log10(getFileSize(m_folder_name)));
+        int levels = floor(log10(getFileSize(m_target)));
         int par = 4;
         commSync->commSend(levels);
-        string_server(commSync, m_folder_name, levels, par);
+        string_server(commSync, m_target, levels, par);
     } else {
-        if (m_folder_name.back() != '/')
-            m_folder_name += "/";
+        if (m_target.back() != '/')
+            m_target += "/";
 
         vector<shared_ptr<DataObject>> unique_set = check_and_get(m_filenames);
         send_diff_files(commSync, 10e2, sizeof(size_t), unique_set, selfMinusOther, otherMinusSelf);
@@ -791,13 +787,13 @@ bool RCDS::SyncServer(const shared_ptr<Communicant> &commSync, list<shared_ptr<D
 
         commSync->commSend((long) selfMinusOther.size());
         for (auto &f: selfMinusOther) {
-            string filename = hash2filename(f->to_ZZ());
+            string filename = m_hash_to_filename[ZZtoT<std::size_t>(f->to_ZZ())];
 
             commSync->commSend((filename.empty()) ? "E" : filename);
             if (filename.empty())
                 continue;
 
-            string full_filename = m_folder_name + filename;
+            string full_filename = m_target + filename;
             int mode = 0;
             // 接收OK/NO_INFO
             (commSync->commRecv_byte() == SYNC_OK_FLAG) ? mode = 1 : mode = 2;
@@ -853,12 +849,12 @@ bool RCDS::SyncClient(const shared_ptr<Communicant> &commSync, list<shared_ptr<D
         Logger::gLog(Logger::METHOD, "We use RCDS.");
         int levels = commSync->commRecv_int();
         int par = 4;
-        string syncContent = string_client(commSync, m_folder_name, levels, par);
+        string syncContent = string_client(commSync, m_target, levels, par);
         if (m_save_file)
-            writeStrToFile(m_folder_name, syncContent);
+            writeStrToFile(m_target, syncContent);
     } else {
-        if (m_folder_name.back() != '/')
-            m_folder_name += "/";
+        if (m_target.back() != '/')
+            m_target += "/";
 
         vector<shared_ptr<DataObject>> unique_set = check_and_get(m_filenames);
         get_diff_files(commSync, 10e2, sizeof(size_t), unique_set, selfMinusOther, otherMinusSelf);
@@ -875,7 +871,7 @@ bool RCDS::SyncClient(const shared_ptr<Communicant> &commSync, list<shared_ptr<D
             string filename = commSync->commRecv_string();
             if (filename == "E")
                 continue;
-            string full_filename = m_folder_name + filename;
+            string full_filename = m_target + filename;
 //            cout << full_filename << endl;
             // 存在此文件, 发OK
             if (isPathExist(full_filename)) {
@@ -917,6 +913,56 @@ bool RCDS::SyncClient(const shared_ptr<Communicant> &commSync, list<shared_ptr<D
 
     commSync->commClose();
     return true;
+}
+
+void RCDS::set_base_proto(shared_ptr<SyncMethod> &setHost, long mbar, size_t elem_size) {
+    if (GenSync::SyncProtocol::InteractiveCPISync == m_RCDS_base_proto)
+//            setHost = make_shared<InterCPISync>(5, elem_size * 8, 64, 3, true);
+//        else if (GenSync::SyncProtocol::CPISync == baseSyncProtocol)
+////        else
+//            setHost = make_shared<ProbCPISync>(mbar, elem_size * 8, 64, true);
+//        else
+        setHost = make_shared<InterCPISync>(5, elem_size * 8, 64, 3, true);
+//        else if (GenSync::SyncProtocol::InteractiveCPISync == baseSyncProtocol)
+//            setHost = make_shared<InterCPISync>(5, elem_size * 8, 64, 3, true);
+}
+
+bool RCDS::get_diff_files(const shared_ptr<Communicant> &commSync, long mbar, size_t elem_size,
+                    vector<shared_ptr<DataObject>> &full_set, list<shared_ptr<DataObject>> &selfMinusOther,
+                    list<shared_ptr<DataObject>> &otherMinusSelf) {
+    selfMinusOther.clear();
+    otherMinusSelf.clear();
+
+    shared_ptr<SyncMethod> setHost;
+    SyncMethod::SyncClient(commSync, selfMinusOther, otherMinusSelf);
+    set_base_proto(setHost, mbar, elem_size);
+    for (auto &dop : full_set) {
+        bool ret = setHost->addElem(dop); // Add to GenSync
+        Logger::gLog(Logger::METHOD, to_string(ret));
+    }
+
+    Logger::gLog(Logger::METHOD, string("Diff: ") + to_string(full_set.size()));
+
+    return setHost->SyncClient(commSync, selfMinusOther, otherMinusSelf);
+}
+
+bool RCDS::send_diff_files(const shared_ptr<Communicant> &commSync, long mbar, size_t elem_size,
+                     vector<shared_ptr<DataObject>> &full_set, list<shared_ptr<DataObject>> &selfMinusOther,
+                     list<shared_ptr<DataObject>> &otherMinusSelf) {
+    selfMinusOther.clear();
+    otherMinusSelf.clear();
+
+    shared_ptr<SyncMethod> setHost;
+    SyncMethod::SyncServer(commSync, selfMinusOther, otherMinusSelf);
+    set_base_proto(setHost, mbar, elem_size);
+    for (auto &dop : full_set) {
+        bool ret = setHost->addElem(dop); // Add to GenSync
+        Logger::gLog(Logger::METHOD, to_string(ret));
+    }
+
+    Logger::gLog(Logger::METHOD, string("Diff: ") + to_string(full_set.size()));
+
+    return setHost->SyncServer(commSync, selfMinusOther, otherMinusSelf);
 }
 
 bool RCDS::string_server(const shared_ptr<Communicant> &commSync, const string& filename, int level, int partition) {

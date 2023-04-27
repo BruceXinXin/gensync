@@ -270,37 +270,64 @@ private:
      */
     bool shingles_to_substr_hashes(cycle &cyc_info, int level, vector<size_t> &hashes_vec) const;
 
-    // 树 转化为 shingle.first->shingles, 并对shingles排序
+    // TODO: cache the results
+    /**
+     * Converting shingles in one level into dict, i.e., start point -> shingles.
+     * And sort the shingles based on the ending point's value.
+     * @param level tree level
+     * @return map that contains mapping with start point to shingles
+     */
     std::map<size_t, vector<shingle>> tree_level_to_shingle_dict(int level) const;
 
-//    // 返回原来的shingle, current_edge更新为shingle的second
-//    size_t get_next_edge(const shingle& shingle);
-
+    /**
+     * Sync basic parameters, method for client.
+     * @param commSync communicant
+     */
     void send_sync_param(const shared_ptr<Communicant> &commSync) const;
 
+    /**
+     * Sync basic parameters, method for client.
+     * @param commSync communicant
+     */
     void recv_sync_param(const shared_ptr<Communicant> &commSync) const;
 
+    // TODO: remove it, let user initialize SyncMethod
+    /**
+     * Initialize the base SyncMethod
+     * @param setHost SyncMethod waiting for being initialized
+     * @param mbar (to be deleted)
+     * @param elem_size (to be deleted)
+     */
     void configure(shared_ptr<SyncMethod> &setHost, long mbar, size_t elem_size);
 
     /**
      * Insert string into dictionary
-     * @param str a substring
+     * @param str string to insert
+     * @return substring hash
      */
-    // 直接传入字符串进去
     size_t add_str_to_dict(const string &str) {
         size_t hash = std::hash<string>()(str);
         dictionary.emplace(hash, make_pair(str, make_pair(0, 0)));
         return hash;
     };
 
-    // 通过索引放子字符串进去
+    /**
+     * Insert substring based on index and length
+     * @param idx start index of the substring
+     * @param len length of the substring
+     * @return substring hash
+     */
     size_t add_str_to_dict_by_idx_len(size_t idx, size_t len) {
         size_t hash = std::hash<string>()(data.substr(idx, len));
         dictionary.emplace(hash, make_pair("", make_pair(idx, len)));
         return hash;
     };
 
-    // 通过哈希找字符串
+    /**
+     * Get substring based on its hash
+     * @param hash substring hash
+     * @return the corresponding string. If the string is not here, return empty string.
+     */
     string get_str_from_dict_by_hash(size_t hash) {
         auto it = dictionary.find(hash);
         if (it != dictionary.end()) {
@@ -312,8 +339,11 @@ private:
         return "";
     }
 
-    // only available for local substrings
-    // 返回对应的pair
+    /**
+     * Get index and length based on substring hash
+     * @param hash substring hash
+     * @return the corresponding value. If the string is not here, return {0, 0}.
+     */
     pair<size_t, size_t> get_idx_len_by_hash(size_t hash) {
         auto it = dictionary.find(hash);
         if (it != dictionary.end())
@@ -323,9 +353,14 @@ private:
     }
 
     // 从一堆shingle_hash中得到去重的字符串哈希值, 返回值需要有序
-    static vector<size_t> get_unique_hashes_from_shingles(const std::set<shingle>& hash_set) {
+    /**
+     * Return multiple shingles' hash values
+     * @param set multiple shingles
+     * @return shingles' unique hash values.
+     */
+    static vector<size_t> get_unique_hashes_from_shingles(const std::set<shingle>& set) {
         std::set<size_t> tmp;
-        for (const shingle& item : hash_set) {
+        for (const shingle& item : set) {
             tmp.insert(item.first);
             tmp.insert(item.second);
         }
@@ -333,6 +368,9 @@ private:
     }
 
     // 获取myTree中去重的ZZ值
+    /**
+     * Get unique shingles from hash shingle tree.
+     */
     vector<ZZ> get_unique_shingleZZs_from_tree() {
         std::set<ZZ> res;
         for (const auto& tree_level: hash_shingle_tree) {
@@ -342,33 +380,65 @@ private:
         return { res.begin(), res.end() };
     };
 
-    bool sync_set_pointers_client(const shared_ptr<Communicant> &commSync, long mbar, size_t elem_size,
-                                  list<shared_ptr<DataObject>> &selfMinusOther, list<shared_ptr<DataObject>> &otherMinusSelf);
+    /**
+     * Sync tree shingle, method for client
+     * @param commSync communicant
+     * @param mbar (to be deleted)
+     * @param elem_size  (to be deleted)
+     * @param selfMinusOther elements that I have while other do not
+     * @param otherMinusSelf elements that other haves while I do not
+     * @return if success
+     */
+    bool sync_tree_shingles_client(const shared_ptr<Communicant> &commSync, long mbar, size_t elem_size,
+                                   list<shared_ptr<DataObject>> &selfMinusOther, list<shared_ptr<DataObject>> &otherMinusSelf);
 
-    bool sync_set_pointers_server(const shared_ptr<Communicant> &commSync, long mbar, size_t elem_size,
-                                  list<shared_ptr<DataObject>> &selfMinusOther, list<shared_ptr<DataObject>> &otherMinusSelf);
+    /**
+     * Sync tree shingle, method for server
+     * @param commSync communicant
+     * @param mbar (to be deleted)
+     * @param elem_size  (to be deleted)
+     * @param selfMinusOther elements that I have while other do not
+     * @param otherMinusSelf elements that other haves while I do not
+     * @return if success
+     */
+    bool sync_tree_shingles_server(const shared_ptr<Communicant> &commSync, long mbar, size_t elem_size,
+                                   list<shared_ptr<DataObject>> &selfMinusOther, list<shared_ptr<DataObject>> &otherMinusSelf);
 
     /**
      * @param to_del elements to delete
-     * @param destroy Destructively delete all delList
-     * @return
+     * @return if we delete all the elements in to_del
      */
     bool del_elements_from_set_pointers(const list<shared_ptr<DataObject>> &to_del);
 
+    /**
+     * Calculate local minimum indexes based on window size
+     * @param hash_val the hash value to be calculated
+     * @param win_size window size
+     * @return The indexes of the local minimum hashes.
+     */
     static vector<size_t> get_local_mins(const vector<size_t> &hash_val, size_t win_size);
 };
 
 
 class RCDS : public SyncMethod {
 public:
-    // NOT_SET改为0
-    // 后三个参数没用(都是在SetOfContent中的参数, RCDS中没用着), 待删除
-    RCDS(GenSync::SyncProtocol RCDS_base_proto, shared_ptr<Communicant>& newComm, size_t terminal_str_size = 10, size_t levels = 0,
+    RCDS(GenSync::SyncProtocol RCDS_base_proto, size_t terminal_str_size = 10, size_t levels = 0,
          size_t partition = 0);
 
-    ~RCDS() = default;
+    ~RCDS() override = default;
 
-    void addStr(shared_ptr<DataObject>& str); // add folder or file location
+    /**
+     * See addStr
+     * @param newDatum folder name or file name
+     * @return if success
+     */
+    bool addElem(shared_ptr<DataObject> newDatum) override;
+
+    /**
+     * Add files in folder or just add a single file
+     * @param str folder name or file name
+     */
+    void addStr(shared_ptr<DataObject>& str);
 
     bool SyncClient(const shared_ptr<Communicant> &commSync, list<shared_ptr<DataObject>> &selfMinusOther,
                     list<shared_ptr<DataObject>> &otherMinusSelf) override;
@@ -378,93 +448,96 @@ public:
 
     string getName() override { return "RCDS Sync."; }
 
-    // 注意是加入文件名的addElem
-    bool addElem(shared_ptr<DataObject> newDatum) override;
+private:
+    // TODO: change it to SyncMethod
+    GenSync::SyncProtocol m_RCDS_base_proto;
+
+    // see RCDS_Synchronizer
+    size_t m_terminal_str_size, m_levels, m_partition;
+
+    // folder name or file name to be synchronized
+    string m_target;
+
+    // if m_target is a folder, we store filenames in it.
+    vector<shared_ptr<DataObject>> m_filenames;
+
+    // for quick lookup
+    map<size_t, string> m_hash_to_filename;
+
+    // if save file after synchronization
+    bool m_save_file;
+
+    // if m_target is a filename
+    bool m_single_file_mode;
 
 private:
-    GenSync::SyncProtocol m_RCDS_base_proto;
-//    size_t m_termStrSize, m_levels, m_partition;
-    string m_folder_name;
-    vector<shared_ptr<DataObject>> m_filenames;
-    map<size_t, string> m_hash2filename;
-    bool m_save_file, m_single_file_mode;
-//    shared_ptr<Communicant> newCommunicant; // comm for baseSyncProtocol
-
-
-    // todo: 决定暂时只开放一种
-    void set_base_proto(shared_ptr<SyncMethod> &setHost, long mbar, size_t elem_size) {
-//        if (GenSync::SyncProtocol::InteractiveCPISync == baseSyncProtocol)
-//            setHost = make_shared<InterCPISync>(5, elem_size * 8, 64, 3, true);
-//        else if (GenSync::SyncProtocol::CPISync == baseSyncProtocol)
-////        else
-//            setHost = make_shared<ProbCPISync>(mbar, elem_size * 8, 64, true);
-//        else
-            setHost = make_shared<InterCPISync>(5, elem_size * 8, 64, 3, true);
-//        else if (GenSync::SyncProtocol::InteractiveCPISync == baseSyncProtocol)
-//            setHost = make_shared<InterCPISync>(5, elem_size * 8, 64, 3, true);
-    }
-
-    bool get_diff_files(const shared_ptr<Communicant> &commSync, long mbar, size_t elem_size,
-                        vector<shared_ptr<DataObject>> &full_set, list<shared_ptr<DataObject>> &selfMinusOther,
-                        list<shared_ptr<DataObject>> &otherMinusSelf) {
-        selfMinusOther.clear();
-        otherMinusSelf.clear();
-
-        shared_ptr<SyncMethod> setHost;
-        SyncMethod::SyncClient(commSync, selfMinusOther, otherMinusSelf);
-        set_base_proto(setHost, mbar, elem_size);
-        for (auto &dop : full_set) {
-            bool ret = setHost->addElem(dop); // Add to GenSync
-            Logger::gLog(Logger::METHOD, to_string(ret));
-        }
-
-        Logger::gLog(Logger::METHOD, string("Diff: ") + to_string(full_set.size()));
-
-        return setHost->SyncClient(commSync, selfMinusOther, otherMinusSelf);
-    };
-
-    bool send_diff_files(const shared_ptr<Communicant> &commSync, long mbar, size_t elem_size,
-                         vector<shared_ptr<DataObject>> &full_set, list<shared_ptr<DataObject>> &selfMinusOther,
-                         list<shared_ptr<DataObject>> &otherMinusSelf) {
-        selfMinusOther.clear();
-        otherMinusSelf.clear();
-
-        shared_ptr<SyncMethod> setHost;
-        SyncMethod::SyncServer(commSync, selfMinusOther, otherMinusSelf);
-        set_base_proto(setHost, mbar, elem_size);
-        for (auto &dop : full_set) {
-            bool ret = setHost->addElem(dop); // Add to GenSync
-            Logger::gLog(Logger::METHOD, to_string(ret));
-        }
-
-        Logger::gLog(Logger::METHOD, string("Diff: ") + to_string(full_set.size()));
-
-        return setHost->SyncServer(commSync, selfMinusOther, otherMinusSelf);
-    };
+    // TODO: remove it, replaced by SyncMethod passed by user
+    void set_base_proto(shared_ptr<SyncMethod> &setHost, long mbar, size_t elem_size);
 
     /**
-     * We check name and file size, hash collision and duplicated filename are strictly prohibited.
+     * Get file(s) that is(are) different, method for client
+     * @param commSync communicant
+     * @param mbar (to be deleted)
+     * @param elem_size (to be deleted)
+     * @param full_set filename(s)
+     * @param selfMinusOther different file's filename(s)
+     * @param otherMinusSelf not useful, but we should keep it
+     * @return if sync success
+     */
+    bool get_diff_files(const shared_ptr<Communicant> &commSync, long mbar, size_t elem_size,
+                          vector<shared_ptr<DataObject>> &full_set, list<shared_ptr<DataObject>> &selfMinusOther,
+                          list<shared_ptr<DataObject>> &otherMinusSelf);
+
+    /**
+     * Get file(s) that is(are) different, method for server
+     * @param commSync communicant
+     * @param mbar (to be deleted)
+     * @param elem_size (to be deleted)
+     * @param full_set filename(s)
+     * @param selfMinusOther different file's filename(s)
+     * @param otherMinusSelf not useful, but we should keep it
+     * @return if sync success
+     */
+    bool send_diff_files(const shared_ptr<Communicant> &commSync, long mbar, size_t elem_size,
+                         vector<shared_ptr<DataObject>> &full_set, list<shared_ptr<DataObject>> &selfMinusOther,
+                         list<shared_ptr<DataObject>> &otherMinusSelf);
+
+    /**
+     * Sync string, method for server
+     * @param commSync communicant
+     * @param filename name of file that needed to be synced
+     * @param level see RCDS_Synchronizer
+     * @param partition see RCDS_Synchronizer
+     * @return if success
+     */
+    bool string_server(const shared_ptr<Communicant> &commSync, const string& filename, int level, int partition);
+
+    /**
+     * Sync string, method for client
+     * @param commSync communicant
+     * @param filename name of file that needed to be synced
+     * @param level see RCDS_Synchronizer
+     * @param partition see RCDS_Synchronizer
+     * @return reconstructed string
+     */
+    string string_client(const shared_ptr<Communicant> &commSync, const string& filename, int level, int partition);
+
+    /**
+     * Put filenames into mapping dict, and check if there are hash collision and duplicated filename.
+     * @param filename_set filename(in DataObject) set
+     * @return hash(es) (in DataObject) of filenames
      */
     vector<shared_ptr<DataObject>> check_and_get(vector<shared_ptr<DataObject>> &filename_set) {
         vector<shared_ptr<DataObject>> res;
-        for (auto &f_name: filename_set) {
-            string heuristic_info = f_name->to_string() + to_string(getFileSize(m_folder_name + f_name->to_string()));
+        for (const auto &f_name: filename_set) {
+            string heuristic_info = f_name->to_string() + to_string(getFileSize(m_target + f_name->to_string()));
             size_t digest = std::hash<std::string>()(heuristic_info);
-            if (!m_hash2filename.emplace(digest, f_name->to_string()).second)
+            if (!m_hash_to_filename.emplace(digest, f_name->to_string()).second)
                 Logger::error_and_quit("Duplicated File name or Hash Collision");
             res.push_back(make_shared<DataObject>(to_ZZ(digest)));
         }
         return res;
     }
-
-    string hash2filename(const ZZ &zz) {
-        return m_hash2filename[conv<size_t>(zz)];
-    };
-
-    bool string_server(const shared_ptr<Communicant> &commSync, const string& filename, int level, int partition);
-
-    string string_client(const shared_ptr<Communicant> &commSync, const string& filename, int level, int partition);
-
 };
 
 #endif //CPISYNC_RCDS_H
