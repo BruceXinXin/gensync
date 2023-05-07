@@ -7,6 +7,8 @@
 
 #include <CPISync/Syncs/RCDS.h>
 
+//#define RCDS_RECORD_OPERATIONS_TIME
+
 //RCDS_Synchronizer::RCDS_Synchronizer(size_t terminal_str_size, size_t levels, size_t partition,
 //                                     GenSync::SyncProtocol base_set_proto, size_t shingle_size, size_t space)
 //        : terminal_str_size(terminal_str_size), level_num(levels), partition_num(partition), base_sync_protocol(base_set_proto),
@@ -26,13 +28,13 @@ bool RCDS_Synchronizer::add_str(string&& str) {
 
     if (data.empty()) return false;
 
-    if (level_num <= 0)
-        Logger::error_and_quit("Level cannot <= 0!");
+    if (level_num <= 1)
+        Logger::error_and_quit("Level cannot <= 1!");
 
     init_tree_by_string_data();
 
     tree_shingles.clear();
-    for (auto& item : get_unique_shingleZZs_from_tree())
+    for (const auto& item : get_unique_shingleZZs_from_tree())
         tree_shingles.emplace_back(new DataObject(item));
     return true;
 }
@@ -60,7 +62,6 @@ bool RCDS_Synchronizer::SyncServer(const shared_ptr<Communicant> &commSync) {
             success = sync_tree_shingles_server(commSync, mbar, sizeof(shingle), selfMinusOther, otherMinusSelf);
             success &= (SYNC_SUCCESS == commSync->commRecv_int());
             commSync->commSend(success? SYNC_SUCCESS: SYNC_FAILURE);
-//            if (success || GenSync::SyncProtocol::IBLTSyncSetDiff != base_sync_protocol)
             if (success)
                 break;
 
@@ -120,6 +121,9 @@ bool RCDS_Synchronizer::SyncClient(const shared_ptr<Communicant> &commSync) {
         mbar = 1 << 10;
     }
 
+#ifdef RCDS_RECORD_OPERATIONS_TIME
+    auto start_pq = std::chrono::high_resolution_clock::now();
+#endif
     bool success = false;
     list<shared_ptr<DataObject>> selfMinusOther, otherMinusSelf;
     size_t top_mbar = pow(2 * partition_num, level_num) * 2; // Upper bound on the number of symmetrical difference
@@ -127,7 +131,6 @@ bool RCDS_Synchronizer::SyncClient(const shared_ptr<Communicant> &commSync) {
         success = sync_tree_shingles_client(commSync, mbar, sizeof(shingle), selfMinusOther, otherMinusSelf);
         commSync->commSend(success? SYNC_SUCCESS: SYNC_FAILURE);
         success &= (SYNC_SUCCESS == commSync->commRecv_int());
-//        if (success || GenSync::SyncProtocol::IBLTSyncSetDiff != base_sync_protocol)
         if (success)
             break;
 
@@ -136,6 +139,10 @@ bool RCDS_Synchronizer::SyncClient(const shared_ptr<Communicant> &commSync) {
                      to_string(2 * (mbar + 1)));
         mbar = 2 * (mbar + 1);
     }
+#ifdef RCDS_RECORD_OPERATIONS_TIME
+    auto end_pq = std::chrono::high_resolution_clock::now();
+    cout << std::chrono::duration_cast<std::chrono::microseconds>(end_pq - start_pq).count() << " ";
+#endif
 
     // before the query
     gen_queries(otherMinusSelf);
@@ -165,7 +172,7 @@ bool RCDS_Synchronizer::SyncClient(const shared_ptr<Communicant> &commSync) {
     if (!use_existing_connection)
         commSync->commClose();
 
-    // 处理elements, 加入oms, 去除smo(Server端暂时无此需求)
+    // add oms, remove smo(we dont need to handle elements in server)
     tree_shingles.reserve(tree_shingles.size() + otherMinusSelf.size());
     for (auto& oms: otherMinusSelf)
         tree_shingles.emplace_back(move(oms));
@@ -174,7 +181,7 @@ bool RCDS_Synchronizer::SyncClient(const shared_ptr<Communicant> &commSync) {
     return success;
 }
 
-bool RCDS_Synchronizer::recover_str(shared_ptr<DataObject>& recovered_str) {
+bool RCDS_Synchronizer::recover_str(string& recovered_str) {
     hash_shingle_tree.clear();
     hash_shingle_tree.resize(level_num);
     for (const auto& s_zz : tree_shingles) {
@@ -183,7 +190,8 @@ bool RCDS_Synchronizer::recover_str(shared_ptr<DataObject>& recovered_str) {
     }
 
     data = retrieve_string();
-    recovered_str = make_shared<DataObject>(data);
+    // maybe we cannot simply move it
+    recovered_str = data;
     return true;
 }
 
@@ -198,9 +206,9 @@ string RCDS_Synchronizer::retrieve_string() {
                 substring.clear();
                 auto& tmp_cycle = it->second;
 
-                if (!shingles_to_substr_hashes(tmp_cycle, i + 1, temp)) {
+                if (!backtracking(tmp_cycle, i + 1, temp)) {
                     substring = get_str_from_dict_by_hash(shingle.second);
-                    cerr << "shingles_to_substr_hashes() return false." << endl;
+                    cerr << "backtracking() return false." << endl;
                 }
 
                 for (size_t hash: temp) {
@@ -245,7 +253,7 @@ vector<size_t> RCDS_Synchronizer::create_hash_vec(size_t str_hash, size_t space,
         auto local_mins = get_local_mins(hash_val, win_size);
         hash_set.reserve(local_mins.size() + 1);
         size_t prev = p.first;
-        // 将每一段由local_min分隔的字符串加入哈希
+        // add these split substrings to hashset
         for (size_t min: local_mins) {
             min += p.first;
             hash_set.push_back(add_str_to_dict_by_idx_len(prev, min - prev));
@@ -256,13 +264,16 @@ vector<size_t> RCDS_Synchronizer::create_hash_vec(size_t str_hash, size_t space,
 
     // write it to cyc-dict
     auto cyc_it = hash_to_substr_hashes.find(str_hash);
-    if (cyc_it == hash_to_substr_hashes.end()) // 当cyc[str_hash]对应的vector只有str_hash一个值时, 可以直接
-        hash_to_substr_hashes[str_hash] = hash_set; // update cyc_dict
+    // simply updates
+    if (cyc_it == hash_to_substr_hashes.end())
+        hash_to_substr_hashes[str_hash] = hash_set;
     else if (cyc_it->second != hash_set) {
-        if (cyc_it->second.size() == 1 && cyc_it->second.front() == cyc_it->first) // just this string alone
-            hash_to_substr_hashes[str_hash] = hash_set; // update cyc_dict
-        else // It is overwritten
-            Logger::error_and_quit("More than one answer is possible for cyc_dict!");
+        // this indicates that we didn't split this string because the size is smaller than terminal size
+        if (cyc_it->second.size() == 1 && cyc_it->second.front() == cyc_it->first)
+            hash_to_substr_hashes[str_hash] = hash_set;
+        // hash collision
+        else
+            Logger::error_and_quit("More than one answer is possible for hash_to_substr_hashes!");
     }
 
     return hash_set;
@@ -278,10 +289,10 @@ void RCDS_Synchronizer::init_tree_by_string_data() {
                 "Error params! level_num: " + to_string(level_num) + ", terminalStrSz: "
                 + to_string(terminal_str_size) + ", actual string size: " + to_string(data.size()));
 
-    size_t shingle_size = 2 * pow(shingle_sz_divisor, level_num); // size of window
+    size_t shingle_size = 2 * pow(shingle_sz_factor, level_num); // size of window
     if (shingle_size < 1)
         Logger::error_and_quit("Shingle size cannot < 1!");
-    size_t space = 4 * pow(space_sz_divisor, level_num); // hash space
+    size_t space = 4 * pow(space_sz_factor, level_num); // hash space
     if (space < 1)
         Logger::error_and_quit("Hash space cannot < 1!");
 
@@ -298,8 +309,8 @@ void RCDS_Synchronizer::init_tree_by_string_data() {
             cur_level_hashes = create_hash_vec(substr_hash, space, shingle_size);
             update_tree_shingles_by_level(cur_level_hashes, level);
         }
-        space = floor(space / space_sz_divisor);
-        shingle_size = floor(shingle_size / shingle_sz_divisor);
+        space = floor(space / space_sz_factor);
+        shingle_size = floor(shingle_size / shingle_sz_factor);
     }
 }
 
@@ -310,14 +321,14 @@ void RCDS_Synchronizer::gen_queries(const list<shared_ptr<DataObject>> &otherMin
     std::unordered_set<size_t> tmp;
     for (const auto& shingle_zz: otherMinusSelf) {
         auto s = ZZtoT<shingle>(shingle_zz->to_ZZ());
-        if (tmp.emplace(s.second).second) // lower level is preferred
+        // lower level is preferred for less backtracking
+        if (tmp.emplace(s.second).second)
             cycle_query.erase(s.second);
 
-        if (dictionary.find(s.second) == dictionary.end()) { // cannot find in dict
-            // shingle不是最后一层
+        if (dictionary.find(s.second) == dictionary.end()) {
+            // shingle in non-terminal level
             if (s.level < level_num - 1)
                 cycle_query.emplace(s.second, cycle{0, 0, 0});
-                // 最后一层
             else
                 terminal_query.emplace(s.second, "");
         }
@@ -333,16 +344,15 @@ bool RCDS_Synchronizer::answer_queries(std::unordered_set<size_t> &queries) {
         for (const auto& shingle : *rit) {
             auto it = queries.find(shingle.second);
             if (it != queries.end()) {
-                // shingle是最后一层
+                // shingle in terminal level, simply send terminal string afterward
                 if (level_num - 1 == shingle.level)
                     terminal_concern.emplace(shingle.second, get_str_from_dict_by_hash(shingle.second));
-                    // 不是最后一层
                 else {
-                    // auto也是对的，证明不一定需要修改cyc_dict[shingle.second]才正确
+                    // server backtracking
                     auto& tmp_vec = hash_to_substr_hashes[shingle.second];
                     cycle tmp = cycle{.head = tmp_vec.front(), .len = static_cast<uint32_t>(tmp_vec.size()), .backtracking_time=0};
 
-                    if (shingles_to_substr_hashes(tmp, shingle.level + 1, tmp_vec))
+                    if (backtracking(tmp, shingle.level + 1, tmp_vec))
                         cycle_concern[shingle.second] = tmp;
                     else
                         continue; // failed
@@ -370,7 +380,7 @@ void RCDS_Synchronizer::update_tree_shingles_by_level(const vector<size_t>& hash
 
     map<pair<size_t, size_t>, size_t> tmp;
 
-    // 取[i - 1]和[i]两个
+    // shingle head node: [i - 1], shingle end node: [i]
     for (int i = 0; i < hash_vector.size(); ++ i) {
         size_t first = 0;
         if (i > 0)
@@ -400,7 +410,7 @@ vector<shingle> RCDS_Synchronizer::potential_next_shingles(size_t point,
 
     auto curr = cur.find(point);
 
-    // 优先找cur, 然后再去org找
+    // give priority to cur
     if (curr != cur.end()) {
         for (const auto& tmp_shingle: curr->second)
             if (tmp_shingle.occur_time > 0)
@@ -408,7 +418,7 @@ vector<shingle> RCDS_Synchronizer::potential_next_shingles(size_t point,
     }
     else {
         auto cur_it = org.find(point);
-        // org没东西, 就不用往下找了
+        // stop lookup if org is empty
         if (cur_it == org.end())
             return res_vec;
 
@@ -420,7 +430,7 @@ vector<shingle> RCDS_Synchronizer::potential_next_shingles(size_t point,
     return res_vec;
 }
 
-bool RCDS_Synchronizer::shingles_to_substr_hashes(cycle &cyc_info, int level, vector<size_t>& hashes_vec) const  {
+bool RCDS_Synchronizer::backtracking(cycle &cyc_info, int level, vector<size_t>& hashes_vec) const  {
     if (hash_shingle_tree[level].empty())
         Logger::error_and_quit("tree_level cannot be empty!");
 
@@ -468,7 +478,6 @@ bool RCDS_Synchronizer::shingles_to_substr_hashes(cycle &cyc_info, int level, ve
 
         // If we can go further with this route
         if (!next_shingles.empty() && res.size() < cyc_info.len) {
-//            last_edge = get_nxt_edge(cur_edge, next_shingles.back());
             last_edge = next_shingles.back();
             cur_point = last_edge.second;
             next_shingles.pop_back();
@@ -481,7 +490,6 @@ bool RCDS_Synchronizer::shingles_to_substr_hashes(cycle &cyc_info, int level, ve
                 res.pop_back();
 
             // look for other edge options
-//            last_edge = get_nxt_edge(cur_edge, next_edges_stk.back().back());
             last_edge = next_edges_stk.back().back();
             cur_point = last_edge.second;
             next_edges_stk.back().pop_back();
@@ -502,7 +510,6 @@ bool RCDS_Synchronizer::shingles_to_substr_hashes(cycle &cyc_info, int level, ve
                 return false;
             }
             else if (!next_edges_stk.back().empty()) {
-//                last_edge = get_nxt_edge(cur_edge, next_edges_stk.back().back());
                 last_edge = next_edges_stk.back().back();
                 cur_point = last_edge.second;
                 next_edges_stk.back().pop_back();
@@ -552,10 +559,6 @@ bool RCDS_Synchronizer::shingles_to_substr_hashes(cycle &cyc_info, int level, ve
                 return true;
             }
         }
-
-//        if (strCollect_size == cyc_info.cyc && cyc_info.cyc != 0) {
-//            return true;
-//        }
     }
     return false;
 }
@@ -603,13 +606,8 @@ void RCDS_Synchronizer::configure(shared_ptr<SyncMethod> &setHost, long mbar, si
 //    if (GenSync::SyncProtocol::IBLTSyncSetDiff == base_sync_protocol)
 //        setHost = make_shared<IBLTSync_SetDiff>(mbar, elem_size, true);
     if (GenSync::SyncProtocol::InteractiveCPISync == base_sync_protocol)
-        // 按test方法改了参数
 //        setHost = make_shared<InterCPISync>(5, elem_size * 8, 64, 3, true);
         setHost = make_shared<InterCPISync>(2 * UCHAR_MAX, pow((double) sizeof(randZZ()), 2.0), 8, 5, true);
-//    if (GenSync::SyncProtocol::CPISync == base_sync_protocol)
-//        // 按test方法改了参数
-////        setHost = make_shared<ProbCPISync>(mbar, elem_size * 8, 64, true);
-//        setHost = make_shared<CPISync>(2 * UCHAR_MAX, elem_size * 8, 8, false);
 }
 
 bool RCDS_Synchronizer::sync_tree_shingles_client(const shared_ptr<Communicant> &commSync, long mbar, size_t elem_size,
@@ -617,11 +615,10 @@ bool RCDS_Synchronizer::sync_tree_shingles_client(const shared_ptr<Communicant> 
     selfMinusOther.clear();
     otherMinusSelf.clear();
     shared_ptr<SyncMethod> setHost;
-    // 取消多态, 抽出这句有用的出来
-    commSync->resetCommCounters();
+
     configure(setHost, mbar, elem_size);
     for (auto& dop : tree_shingles) {
-        setHost->addElem(dop); // Add to GenSync
+        setHost->addElem(dop);
     }
     bool success = setHost->SyncClient(commSync, selfMinusOther, otherMinusSelf);
     if (!del_elements_from_set_pointers(selfMinusOther))
@@ -637,11 +634,10 @@ bool RCDS_Synchronizer::sync_tree_shingles_server(const shared_ptr<Communicant> 
     selfMinusOther.clear();
     otherMinusSelf.clear();
     shared_ptr<SyncMethod> setHost;
-    // 取消多态, 抽出这句有用的出来
-    commSync->resetCommCounters();
+
     configure(setHost, mbar, elem_size);
     for (const auto& dop : tree_shingles)
-        setHost->addElem(dop); // Add to GenSync
+        setHost->addElem(dop);
     return setHost->SyncServer(commSync, selfMinusOther, otherMinusSelf);
 }
 
@@ -677,27 +673,27 @@ vector<size_t> RCDS_Synchronizer::get_local_mins(const vector<size_t> &hash_val,
     if (2 * win_size + 1 > hash_val.size())
         return mins;
 
-    // 将一个2 * win_size + 1窗口大小的hash值加入map
+    // add 2 * win_size + 1 hashes to map first
     // We should use RB tree to maintain order.
     map<size_t, size_t> hash_occur_cnt;
     for (size_t j = 0; j < 2 * win_size + 1; ++ j)
         ++ hash_occur_cnt[hash_val[j]];
 
-    // i为窗口中心
+    // i is the center of window
     for (size_t i = win_size; i < hash_val.size() - win_size; ++ i) {
         // smaller than smallest hash && bigger than one window
         if (hash_val[i] <= hash_occur_cnt.begin()->first && ((mins.empty())? i : i - mins.back()) > win_size)
             mins.push_back(i);
 
-        // 在最后一次循环跳出, 不然下一句会超出索引
+        // jump out of the loop in the end
         if (i + win_size + 1 == hash_val.size())
             break;
 
-        // 窗口最左边跟窗口最右边的右边的哈希值一样, 可以跳过删除最左边和插入最右边
+        // if the hashes in window's left and window's right are the same, skip updating
         if (hash_val[i - win_size] == hash_val[i + win_size + 1])
             continue;
 
-        // 找窗口最左边的hash, 找到则计数减一或删去
+        // remove hash in window's left
         auto it_prev = hash_occur_cnt.find(hash_val[i - win_size]);
         if (it_prev != hash_occur_cnt.end()) {
             if (it_prev->second > 1)
@@ -705,7 +701,7 @@ vector<size_t> RCDS_Synchronizer::get_local_mins(const vector<size_t> &hash_val,
             else hash_occur_cnt.erase(it_prev);
         }
 
-        // 插入窗口最右边的hash
+        // add hash in window's right
         ++ hash_occur_cnt[hash_val[i + win_size + 1]];
     }
 
@@ -716,7 +712,6 @@ vector<size_t> RCDS_Synchronizer::get_local_mins(const vector<size_t> &hash_val,
 RCDS::RCDS(GenSync::SyncProtocol RCDS_base_proto, size_t terminal_str_size, size_t levels, size_t partition)
         : m_RCDS_base_proto(RCDS_base_proto), m_terminal_str_size(terminal_str_size), m_levels(levels), m_partition(partition) {
 
-    // 多文件模式下不会调用Client的addStr, 也就不会更新这个标志, 先置位单文件模式为false
     m_single_file_mode = false;
     m_save_file = true;
 }
@@ -725,14 +720,13 @@ bool RCDS::addElem(shared_ptr<DataObject> newDatum) {
     Logger::gLog(Logger::METHOD,"Entering RCDS::addElem");
 
     if(!SyncMethod::addElem(newDatum)) return false;
-    addStr(newDatum);
+    register_file(newDatum);
     Logger::gLog(Logger::METHOD, "Successfully added shared_ptr<DataObject> {" + newDatum->print() + "}");
     return true;
 }
 
-// 把文件名字符串以DataObject形式放入setPointers(同时更新了FolderName), 并判断是否是singleFileMode
-void RCDS::addStr(shared_ptr<DataObject>& str) {
-    // 不允许多个文件夹
+void RCDS::register_file(shared_ptr<DataObject>& str) {
+    // multiple folders is not supported yet
     string tmp = str->to_string();
     if (!m_target.empty()) {
         if (m_target != tmp)
@@ -767,7 +761,6 @@ bool RCDS::SyncServer(const shared_ptr<Communicant> &commSync, list<shared_ptr<D
         Logger::error_and_quit("Cannot sync folder and file together!");
     }
 
-    // 单文件模式必须在Sync之前就写好双方的FolderName, 多文件模式可以只写服务端的FolderName
     if (m_single_file_mode) {
         Logger::gLog(Logger::METHOD, "We use RCDS.");
         int levels = floor(log10(getFileSize(m_target)));
@@ -782,7 +775,7 @@ bool RCDS::SyncServer(const shared_ptr<Communicant> &commSync, list<shared_ptr<D
         send_diff_files(commSync, 10e2, sizeof(size_t), unique_set, selfMinusOther, otherMinusSelf);
 //        newCommunicant->commClose();
 
-        // 清空otherMinusSelf
+        // clear otherMinusSelf
         otherMinusSelf.clear();
 
         commSync->commSend((long) selfMinusOther.size());
@@ -795,38 +788,42 @@ bool RCDS::SyncServer(const shared_ptr<Communicant> &commSync, list<shared_ptr<D
 
             string full_filename = m_target + filename;
             int mode = 0;
-            // 接收OK/NO_INFO
+            // receive OK/NO_INFO
             (commSync->commRecv_byte() == SYNC_OK_FLAG) ? mode = 1 : mode = 2;
 
-            // 这里发的FAIL临时指代小文件发送方式
+            // The FAIL sent here temporarily refers to the small file sending method
             // FIXME: just for debug, change back to 500
-            if (mode == 1 and getFileSize(full_filename) < 1) {
+            if (mode == 1 and getFileSize(full_filename) < 500) {
                 commSync->commSend(SYNC_FAIL_FLAG);
                 mode = 2;
-            } else if (mode == 1) {
-                commSync->commSend(SYNC_OK_FLAG);// check file size
-            }
+            } else if (mode == 1)
+                commSync->commSend(SYNC_OK_FLAG);
 
-            // 小文件用full sync
+            // we use full sync if the file is small
             if (mode == 2) {
                 Logger::gLog(Logger::METHOD, "We use FullSync.");
                 if (m_save_file) {
-                    string content = scanTxtFromFile(full_filename, numeric_limits<int>::max());
+                    string content = scanWholeTxt(full_filename);
                     commSync->commSend((content.empty() ? "E" : content));
                 }
             } else if (mode == 1) {
                 Logger::gLog(Logger::METHOD, "We use RCDS");
-                // FIXME: just for debug, change back to log10
                 int levels = nearbyint(log10(getFileSize(full_filename)));
                 // FIXME: just for debug, change back to 4
                 int par = 4;
                 commSync->commSend(levels);
                 string_server(commSync, full_filename, levels, par);
             }
-            else Logger::error_and_quit("Unkonwn Sync Mode, should never happen in RCDS");
+            else
+                Logger::error_and_quit("Unkonwn Sync Mode, should never happen in RCDS");
 
         }
     }
+
+    // Record Stats
+    mySyncStats.increment(SyncStats::XMIT, commSync->getXmitBytes());
+    mySyncStats.increment(SyncStats::RECV, commSync->getRecvBytes());
+
     commSync->commClose();
     return true;
 }
@@ -860,7 +857,7 @@ bool RCDS::SyncClient(const shared_ptr<Communicant> &commSync, list<shared_ptr<D
         get_diff_files(commSync, 10e2, sizeof(size_t), unique_set, selfMinusOther, otherMinusSelf);
 //        newCommunicant->commClose();
 
-        // 清空otherMinusSelf
+        // clear otherMinusSelf
         otherMinusSelf.clear();
 
         size_t diff_size = commSync->commRecv_long();
@@ -872,21 +869,23 @@ bool RCDS::SyncClient(const shared_ptr<Communicant> &commSync, list<shared_ptr<D
             if (filename == "E")
                 continue;
             string full_filename = m_target + filename;
-//            cout << full_filename << endl;
-            // 存在此文件, 发OK
+
+            // if file exists, send OK
             if (isPathExist(full_filename)) {
                 commSync->commSend(SYNC_OK_FLAG);
                 mode = 1;
-            } else { // 不存在, 发NO_INFO
+            }
+            // otherwise send NO_INFO
+            else {
                 commSync->commSend(SYNC_NO_INFO);
                 mode = 2;
             }
 
-            // 这里收的FAIL临时指代小文件发送方式
+            // The FAIL receive here temporarily refers to the small file sending method
             if (mode == 1 and commSync->commRecv_byte() == SYNC_FAIL_FLAG)
                 mode = 2;
 
-            // 小文件用full sync
+            // we use full sync if the file is small
             if (mode == 2) {
                 cout << "Using FullSync" << endl;
                 Logger::gLog(Logger::METHOD, "We use FullSync.");
@@ -911,6 +910,10 @@ bool RCDS::SyncClient(const shared_ptr<Communicant> &commSync, list<shared_ptr<D
         }
     }
 
+    // Record Stats
+    mySyncStats.increment(SyncStats::XMIT, commSync->getXmitBytes());
+    mySyncStats.increment(SyncStats::RECV, commSync->getRecvBytes());
+
     commSync->commClose();
     return true;
 }
@@ -918,9 +921,6 @@ bool RCDS::SyncClient(const shared_ptr<Communicant> &commSync, list<shared_ptr<D
 void RCDS::set_base_proto(shared_ptr<SyncMethod> &setHost, long mbar, size_t elem_size) {
     if (GenSync::SyncProtocol::InteractiveCPISync == m_RCDS_base_proto)
 //            setHost = make_shared<InterCPISync>(5, elem_size * 8, 64, 3, true);
-//        else if (GenSync::SyncProtocol::CPISync == baseSyncProtocol)
-////        else
-//            setHost = make_shared<ProbCPISync>(mbar, elem_size * 8, 64, true);
 //        else
         setHost = make_shared<InterCPISync>(5, elem_size * 8, 64, 3, true);
 //        else if (GenSync::SyncProtocol::InteractiveCPISync == baseSyncProtocol)
@@ -937,7 +937,7 @@ bool RCDS::get_diff_files(const shared_ptr<Communicant> &commSync, long mbar, si
     SyncMethod::SyncClient(commSync, selfMinusOther, otherMinusSelf);
     set_base_proto(setHost, mbar, elem_size);
     for (auto &dop : full_set) {
-        bool ret = setHost->addElem(dop); // Add to GenSync
+        bool ret = setHost->addElem(dop);
         Logger::gLog(Logger::METHOD, to_string(ret));
     }
 
@@ -956,7 +956,7 @@ bool RCDS::send_diff_files(const shared_ptr<Communicant> &commSync, long mbar, s
     SyncMethod::SyncServer(commSync, selfMinusOther, otherMinusSelf);
     set_base_proto(setHost, mbar, elem_size);
     for (auto &dop : full_set) {
-        bool ret = setHost->addElem(dop); // Add to GenSync
+        bool ret = setHost->addElem(dop);
         Logger::gLog(Logger::METHOD, to_string(ret));
     }
 
@@ -966,10 +966,9 @@ bool RCDS::send_diff_files(const shared_ptr<Communicant> &commSync, long mbar, s
 }
 
 bool RCDS::string_server(const shared_ptr<Communicant> &commSync, const string& filename, int level, int partition) {
-    // 必须要让useExisting为true!
     auto stringHost = RCDS_Synchronizer(m_RCDS_base_proto, level, partition);
 
-    string content = scanTxtFromFile(filename, numeric_limits<int>::max());
+    string content = scanWholeTxt(filename);
     stringHost.add_str(move(content));
 
     stringHost.SyncServer(commSync);
@@ -977,18 +976,33 @@ bool RCDS::string_server(const shared_ptr<Communicant> &commSync, const string& 
 }
 
 string RCDS::string_client(const shared_ptr<Communicant> &commSync, const string& filename, int level, int partition) {
-    // 必须要让useExisting为true!
     auto stringHost = RCDS_Synchronizer(m_RCDS_base_proto, level, partition);
 
     list<shared_ptr<DataObject>> selfMinusOther, otherMinusSelf;
 
-    string content = scanTxtFromFile(filename, numeric_limits<int>::max());
+    string content = scanWholeTxt(filename);
+#ifdef RCDS_RECORD_OPERATIONS_TIME
+    auto start_pq = std::chrono::high_resolution_clock::now();
+#endif
     stringHost.add_str(move(content));
+#ifdef RCDS_RECORD_OPERATIONS_TIME
+    auto end_pq = std::chrono::high_resolution_clock::now();
+    size_t total_time = std::chrono::duration_cast<std::chrono::microseconds>(end_pq - start_pq).count();
+    cout << total_time << " ";
+#endif
 
     stringHost.SyncClient(commSync);
 
-    // 重建字符串
-    shared_ptr<DataObject> res;
+    // recover string
+    string res;
+#ifdef RCDS_RECORD_OPERATIONS_TIME
+    start_pq = std::chrono::high_resolution_clock::now();
+#endif
     stringHost.recover_str(res);
-    return res->to_string();
+#ifdef RCDS_RECORD_OPERATIONS_TIME
+    end_pq = std::chrono::high_resolution_clock::now();
+    total_time = std::chrono::duration_cast<std::chrono::microseconds>(end_pq - start_pq).count();
+    cout << total_time << " ";
+#endif
+    return res;
 }

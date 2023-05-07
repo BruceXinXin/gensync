@@ -214,11 +214,11 @@ void Communicant::commSend(const long num) {
  * @author Bruce Xin
  * @param num
  */
-void Communicant::commSend(const hashVal num) {
+void Communicant::commSend(size_t num) {
 
     unsigned char toSend[XMIT_LONG];
     BytesFromZZ(toSend, to_ZZ(num), XMIT_LONG);
-    Logger::gLog(Logger::COMM, "... attempting to send: hashVal " + toStr(num));
+    Logger::gLog(Logger::COMM, "... attempting to send: size_t " + toStr(num));
     commSend(ustring(toSend, XMIT_LONG), XMIT_LONG);
 }
 

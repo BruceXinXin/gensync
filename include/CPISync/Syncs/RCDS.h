@@ -98,9 +98,10 @@ public:
     RCDS_Synchronizer(GenSync::SyncProtocol base_set_proto, size_t levels, size_t partition, size_t terminal_str_size = 10)
             : terminal_str_size(terminal_str_size), level_num(levels), partition_num(partition),
               base_sync_protocol(base_set_proto) {
+        // use_existing_connection should be true!
         use_existing_connection = true;
-        shingle_sz_divisor = 2;
-        space_sz_divisor = 8;
+        shingle_sz_factor = 2;
+        space_sz_factor = 8;
     };
 
     ~RCDS_Synchronizer() = default;
@@ -130,7 +131,7 @@ public:
      * @warning must be called after Syncing
      * @return
      */
-    bool recover_str(shared_ptr<DataObject>& recovered_str);
+    bool recover_str(string& recovered_str);
 
 private:
     // TODO: we no longer need it
@@ -169,12 +170,12 @@ private:
      *
      * @note higher for higher split granularity, but also for creating more shingles and increasing split operations
      */
-    size_t shingle_sz_divisor;
+    size_t shingle_sz_factor;
 
     /**
      * The divisor for each layer to gradually decrease the hash space size for local_min algorithm.
      */
-    size_t space_sz_divisor;
+    size_t space_sz_factor;
 
     // TODO: to be replaced by SyncMethod passed by users
     GenSync::SyncProtocol base_sync_protocol;
@@ -191,13 +192,14 @@ private:
 
     // The hash value -> the hash values of the split substrings of the string corresponding to the hash value
     // if there are hash collision, it's a kind of error.
+    // only for sever
     unordered_map<size_t, vector<size_t>> hash_to_substr_hashes;
 
     // client concerned terminal strings and server sent terminal strings
     unordered_map<size_t, string> terminal_concern, terminal_query;
 
     // client concerned cycles and server sent cycles
-    // should not use hashmap
+    // should not use hashmap, because we need to keep the same order
     map<size_t, cycle> cycle_concern, cycle_query;
 
 private:
@@ -268,7 +270,7 @@ private:
      * @param hashes_vec a hash train in string order
      * @return if success
      */
-    bool shingles_to_substr_hashes(cycle &cyc_info, int level, vector<size_t> &hashes_vec) const;
+    bool backtracking(cycle &cyc_info, int level, vector<size_t> &hashes_vec) const;
 
     // TODO: cache the results
     /**
@@ -426,17 +428,11 @@ public:
     ~RCDS() override = default;
 
     /**
-     * See addStr
+     * See register_file
      * @param newDatum folder name or file name
      * @return if success
      */
     bool addElem(shared_ptr<DataObject> newDatum) override;
-
-    /**
-     * Add files in folder or just add a single file
-     * @param str folder name or file name
-     */
-    void addStr(shared_ptr<DataObject>& str);
 
     bool SyncClient(const shared_ptr<Communicant> &commSync, list<shared_ptr<DataObject>> &selfMinusOther,
                     list<shared_ptr<DataObject>> &otherMinusSelf) override;
@@ -469,6 +465,12 @@ private:
     bool m_single_file_mode;
 
 private:
+    /**
+     * Add files in folder or just add a single file
+     * @param str folder name or file name
+     */
+    void register_file(shared_ptr<DataObject>& str);
+
     // TODO: remove it, replaced by SyncMethod passed by user
     void set_base_proto(shared_ptr<SyncMethod> &setHost, long mbar, size_t elem_size);
 

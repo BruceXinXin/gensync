@@ -423,7 +423,7 @@ public:
     /**
      * @author Bruce Xin
      */
-    void commSend(const hashVal num);
+    void commSend(size_t num);
 
     /**
      * @author Bruce Xin
