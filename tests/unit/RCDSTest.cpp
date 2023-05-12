@@ -30,7 +30,7 @@ void RCDSTest::BenchMark() {
     string filename_server = "../tests/rand_file_server.txt";
     string filename_client = "../tests/rand_file_client.txt";
     vector<size_t> sizes; sizes.reserve(100);
-    for (size_t i = 1; i <= 60; ++ i)
+    for (size_t i = 155; i <= 600; ++ i)
         sizes.push_back(i * 200000);
 
     for (size_t size: sizes) {
@@ -70,16 +70,16 @@ void RCDSTest::BenchMark() {
                      {make_shared<DataObject>(filename_client)},
                      false);
             auto stop_pq = std::chrono::high_resolution_clock::now();
-//            size_t total_time = std::chrono::duration_cast<std::chrono::microseconds>(stop_pq - start_pq).count();
-//            size_t total_bits = GenSyncClient.getXmitBytes(0) + GenSyncClient.getRecvBytes(0);
+            size_t total_time = std::chrono::duration_cast<std::chrono::microseconds>(stop_pq - start_pq).count();
+            size_t total_bits = GenSyncClient.getXmitBytes(0) + GenSyncClient.getRecvBytes(0);
 
             // assert
             CPPUNIT_ASSERT(scanWholeTxt(filename_client) == rand_str);
 
-            cout << endl;
+//            cout << endl;
 
-//            // TODO record them
-//            cout << size << " " << edit << " " << total_time << " " << total_bits << endl;
+            // TODO record them
+            cout << size << " " << edit << " " << total_time << " " << total_bits << endl;
 
 
 //            // 2. rsync
@@ -223,6 +223,7 @@ string StringUtils::rand_str(size_t len) {
 
     for (size_t jj = 0; jj < len; ++jj) {
         auto c = 1 + rand() % 125;  // avoid random string to be "$" changed to "%"
+//        auto c = 100 + rand() % 5;  // avoid random string to be "$" changed to "%"
         str += c;
 
     }

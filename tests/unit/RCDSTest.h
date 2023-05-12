@@ -18,8 +18,8 @@ using std::string;
 class RCDSTest : public CPPUNIT_NS::TestFixture {
     CPPUNIT_TEST_SUITE(RCDSTest);
 
-    CPPUNIT_TEST(RCDSSetReconcileTest);
-//    CPPUNIT_TEST(BenchMark);
+//    CPPUNIT_TEST(RCDSSetReconcileTest);
+    CPPUNIT_TEST(BenchMark);
 
     CPPUNIT_TEST_SUITE_END();
 public:

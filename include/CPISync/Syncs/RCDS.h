@@ -186,6 +186,9 @@ private:
     // hash shingle tree
     vector<std::set<shingle>> hash_shingle_tree;
 
+    // cache for tree_level_to_shingle_dict
+    vector<std::map<size_t, vector<shingle>>> cache;
+
     // lookup dictionary
     // hash -> (string, (start_idx, len))
     unordered_map<size_t, pair<string, pair<size_t, size_t>>> dictionary;
@@ -264,22 +267,24 @@ private:
      * Shingle_hashes back to a vector of hashes in the string order
      * For updating cycle's backtracking time(using hashes_vec and updating cyc_info.backtracking_time)
      *      or getting hashes_vec of this string(using cyc_info.backtracking_time and updating hashes_vec)
-     * With communicating cyc_info.backtracking_time, we can uniquely get the corresponding string
-     * @param cyc_info cycle struct
-     * @param tree_level the level of the shingle tree
+     * With communicating cyc.backtracking_time, we can uniquely get the corresponding string
+     * @param cyc cycle struct
+     * @param level the level of the shingle tree
      * @param hashes_vec a hash train in string order
      * @return if success
      */
-    bool backtracking(cycle &cyc_info, int level, vector<size_t> &hashes_vec) const;
+    bool backtracking(cycle &cyc_info, int level, vector<size_t> &hashes_vec);
+    bool backtracking2(cycle &cyc, int level, vector<size_t> &hashes_vec);
 
-    // TODO: cache the results
     /**
      * Converting shingles in one level into dict, i.e., start point -> shingles.
      * And sort the shingles based on the ending point's value.
+     * @note we cache the results since we will use the same data multiple times
+     * @warning should not change the shingle tree from the first to the last use of this function
      * @param level tree level
      * @return map that contains mapping with start point to shingles
      */
-    std::map<size_t, vector<shingle>> tree_level_to_shingle_dict(int level) const;
+    std::map<size_t, vector<shingle>>& tree_level_to_shingle_dict(int level);
 
     /**
      * Sync basic parameters, method for client.
@@ -309,7 +314,15 @@ private:
      */
     size_t add_str_to_dict(const string &str) {
         size_t hash = std::hash<string>()(str);
-        dictionary.emplace(hash, make_pair(str, make_pair(0, 0)));
+//        if (hash == 12573527631396608276ul)
+//            cout << str.size() << endl;
+//        dictionary.emplace(hash, make_pair(str, make_pair(0, 0)));
+        dictionary[hash] = make_pair(str, make_pair(0, 0));
+//        if (hash == 12573527631396608276ul) {
+//            cout << dictionary[hash].first.size() << endl;
+//            cout << std::hash<string>()(dictionary[hash].first) << endl;
+//            cout << std::hash<string>()(dictionary[12573527631396608276ul].first) << endl;
+//        }
         return hash;
     };
 
@@ -321,7 +334,10 @@ private:
      */
     size_t add_str_to_dict_by_idx_len(size_t idx, size_t len) {
         size_t hash = std::hash<string>()(data.substr(idx, len));
-        dictionary.emplace(hash, make_pair("", make_pair(idx, len)));
+//        if (hash == 12573527631396608276ul)
+//            cout << len << endl;
+//        dictionary.emplace(hash, make_pair("", make_pair(idx, len)));
+        dictionary[hash] = make_pair("", make_pair(idx, len));
         return hash;
     };
 
@@ -330,7 +346,7 @@ private:
      * @param hash substring hash
      * @return the corresponding string. If the string is not here, return empty string.
      */
-    string get_str_from_dict_by_hash(size_t hash) {
+    string get_str_from_dict_by_hash(size_t hash) const {
         auto it = dictionary.find(hash);
         if (it != dictionary.end()) {
             if (it->second.first.empty() and it->second.second.second != 0)
@@ -346,7 +362,7 @@ private:
      * @param hash substring hash
      * @return the corresponding value. If the string is not here, return {0, 0}.
      */
-    pair<size_t, size_t> get_idx_len_by_hash(size_t hash) {
+    pair<size_t, size_t> get_idx_len_by_hash(size_t hash) const {
         auto it = dictionary.find(hash);
         if (it != dictionary.end())
             return it->second.second;
@@ -371,7 +387,7 @@ private:
     /**
      * Get unique shingles from hash shingle tree.
      */
-    vector<ZZ> get_unique_shingleZZs_from_tree() {
+    vector<ZZ> get_unique_shingleZZs_from_tree() const {
         std::set<ZZ> res;
         for (const auto& tree_level: hash_shingle_tree) {
             for (const auto& item: tree_level)

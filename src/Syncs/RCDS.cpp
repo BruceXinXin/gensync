@@ -196,6 +196,8 @@ bool RCDS_Synchronizer::recover_str(string& recovered_str) {
 }
 
 string RCDS_Synchronizer::retrieve_string() {
+//    cout << "C queries size: " << cycle_query.size() << endl;
+
     // retrieve string from bottom
     string substring;
     for (int i = hash_shingle_tree.size() - 2; i >= 0; -- i) {
@@ -206,10 +208,38 @@ string RCDS_Synchronizer::retrieve_string() {
                 substring.clear();
                 auto& tmp_cycle = it->second;
 
-                if (!backtracking(tmp_cycle, i + 1, temp)) {
+//                cout << tmp_cycle.backtracking_time << endl;
+//                if (std::hash<string>()(dictionary[tmp_cycle.head].first) != tmp_cycle.head){
+//                    cout << (dictionary.find(tmp_cycle.head) == dictionary.end()) << endl;
+//                    cout << (tmp_cycle.head == 12573527631396608276ul) << endl;
+//                    cout << std::hash<string>()(dictionary[tmp_cycle.head].first) << " " << tmp_cycle.head << endl;
+//                    cout << std::hash<string>()(dictionary[12573527631396608276ul].first) << " " << tmp_cycle.head << endl;
+//                    cout << dictionary[tmp_cycle.head].first.size() << endl;
+//                }
+
+//                size_t sz = dictionary[12573527631396608276ul].first.size();
+//                cout << sz << endl;
+//                cout << hash<string>()(substring) << endl;
+//                size_t h = hash<string>()(dictionary[12573527631396608276ul].first);
+//                cout << h << endl;
+
+//                cout << tmp_cycle.backtracking_time << endl;
+                if (!backtracking2(tmp_cycle, i + 1, temp)) {
                     substring = get_str_from_dict_by_hash(shingle.second);
-                    cerr << "backtracking() return false." << endl;
+                    cerr << "client backtracking() return false." << endl;
                 }
+
+//                sz = dictionary[12573527631396608276ul].first.size();
+//                cout << sz << endl;
+//                cout << hash<string>()(substring) << endl;
+//                cout << hash<string>()(dictionary[12573527631396608276ul].first) << endl;
+
+//                // for debug
+//                cout << "C:";
+//                for (size_t t: temp)
+////                    cout << (!dictionary[t].first.empty()? dictionary[t].first.size(): -1) << ",";
+//                    cout << t << ",";
+//                cout << endl;
 
                 for (size_t hash: temp) {
                     if (dictionary.find(hash) == dictionary.end())
@@ -218,8 +248,15 @@ string RCDS_Synchronizer::retrieve_string() {
                              << shingle.level << endl;
                     substring += get_str_from_dict_by_hash(hash);
                 }
+
+//                sz = dictionary[12573527631396608276ul].first.size();
+//                cout << sz << endl;
+//                cout << hash<string>()(substring) << endl;
                 add_str_to_dict(substring);
-            }
+//                sz = dictionary[12573527631396608276ul].first.size();
+//                cout << sz << endl;
+//                cout << hash<string>()(substring) << endl;
+           }
         }
     }
 
@@ -339,6 +376,8 @@ bool RCDS_Synchronizer::answer_queries(std::unordered_set<size_t> &queries) {
     cycle_concern.clear();
     terminal_concern.clear();
 
+//    cout << "S queries size: " << queries.size() << endl;
+
     // from bottom to top
     for (auto rit = hash_shingle_tree.rbegin(); rit != hash_shingle_tree.rend(); ++ rit) {
         for (const auto& shingle : *rit) {
@@ -350,12 +389,23 @@ bool RCDS_Synchronizer::answer_queries(std::unordered_set<size_t> &queries) {
                 else {
                     // server backtracking
                     auto& tmp_vec = hash_to_substr_hashes[shingle.second];
+
+//                    // for debug
+//                    cout << "S:";
+//                    for (size_t t: tmp_vec)
+////                        cout << dictionary[t].second.second << ",";
+//                        cout << t << ",";
+//                    cout << endl;
+
                     cycle tmp = cycle{.head = tmp_vec.front(), .len = static_cast<uint32_t>(tmp_vec.size()), .backtracking_time=0};
 
-                    if (backtracking(tmp, shingle.level + 1, tmp_vec))
+                    if (backtracking2(tmp, shingle.level + 1, tmp_vec)) {
                         cycle_concern[shingle.second] = tmp;
-                    else
+                    }
+                    else {
+                        cerr << "server backtracking failed!" << endl;
                         continue; // failed
+                    }
                 }
 
                 // if success, erase this query
@@ -430,7 +480,7 @@ vector<shingle> RCDS_Synchronizer::potential_next_shingles(size_t point,
     return res_vec;
 }
 
-bool RCDS_Synchronizer::backtracking(cycle &cyc_info, int level, vector<size_t>& hashes_vec) const  {
+bool RCDS_Synchronizer::backtracking(cycle &cyc_info, int level, vector<size_t>& hashes_vec)  {
     if (hash_shingle_tree[level].empty())
         Logger::error_and_quit("tree_level cannot be empty!");
 
@@ -465,7 +515,7 @@ bool RCDS_Synchronizer::backtracking(cycle &cyc_info, int level, vector<size_t>&
             return true;
         }
     }
-        // cycle number is 1
+    // cycle number is 1
     else if (cyc_info.backtracking_time == 1 && cyc_info.len == 1) {
         hashes_vec = res;
         return true;
@@ -563,13 +613,119 @@ bool RCDS_Synchronizer::backtracking(cycle &cyc_info, int level, vector<size_t>&
     return false;
 }
 
-std::map<size_t, vector<shingle>> RCDS_Synchronizer::tree_level_to_shingle_dict(int level) const {
-    std::map<size_t, vector<shingle>> res;
-    for (const auto& shingle : hash_shingle_tree[level])
-        res[shingle.first].push_back(shingle);
+bool RCDS_Synchronizer::backtracking2(cycle &cyc, int level, vector<size_t> &hashes_vec) {
+    if (hash_shingle_tree[level].empty())
+        Logger::error_and_quit("tree_level cannot be empty!");
 
-    for (auto &shingle: res)
-        std::sort(shingle.second.begin(), shingle.second.end());
+    // get shingle.first->shingles from this tree level
+    // avoid copying data
+    auto& hash_to_shingles = tree_level_to_shingle_dict(level);
+
+    vector<size_t> cur;
+    // parent, self, which_child_should_we_start_dfs_now
+    stack<tuple<size_t, size_t, size_t>> stk;
+    // find head in $0's next points
+    // because we use binary search, vector<shingle> should be sorted by shingle.second
+    {
+        auto it = lower_bound(hash_to_shingles[0].begin(), hash_to_shingles[0].end(), cyc.head, [](const shingle& s1, size_t target){
+            return s1.second < target;
+        });
+        assert(it != hash_to_shingles[0].end());
+        cur.push_back(it->second);
+        stk.emplace(0, it->second, 0);
+    }
+
+    size_t removed_edges = 0;
+    size_t backtracking_time = 0;
+    while (!stk.empty()) {
+        size_t parent, v;
+        size_t& num = get<2>(stk.top());
+        {
+            auto& tmp = stk.top();
+            parent = get<0>(tmp);
+            v = get<1>(tmp);
+        }
+
+        bool recover_edge = false;
+        // reach an end
+        if (cur.size() == cyc.len) {
+            ++ backtracking_time;
+            // (client backtracking && backtracking time reaches end) || (server backtracking && find the path)
+            if ((backtracking_time != 0 && backtracking_time == cyc.backtracking_time) || cur == hashes_vec) {
+                cyc.backtracking_time = backtracking_time;
+                hashes_vec = move(cur);
+
+                // end iteration
+//                cout << removed_edges << " " << hashes_vec.size() << endl;
+                assert(removed_edges == hashes_vec.size() - 1);
+                return true;
+            }
+
+            // this path is not our target path
+            recover_edge = true;
+        }
+        // still not reach to the end
+        else {
+            bool updated = false;
+            auto& vec = hash_to_shingles[v];
+            for (size_t i = num; i < vec.size(); ++ i) {
+                auto& s = vec[i];
+                if (s.occur_time > 0) {
+                    -- s.occur_time;
+                    ++ removed_edges;
+                    num = i + 1;
+                    stk.emplace(v, s.second, 0);
+                    cur.push_back(s.second);
+
+                    updated = true;
+                    break;
+                }
+            }
+
+            // no more valid edge
+            if (!updated)
+                recover_edge = true;
+        }
+
+        // recover edge's occur_time
+        // must implement it when we cache the hash_to_shingles
+        // because we use binary search, vector<shingle> should be sorted by shingle.second
+        if (recover_edge) {
+            // be aware of the order of s1.second and target, debug for quite a long time!
+            auto it = lower_bound(hash_to_shingles[parent].begin(), hash_to_shingles[parent].end(), v, [](const shingle& s1, size_t target){
+                return s1.second < target;
+            });
+            assert(it != hash_to_shingles[parent].end());
+            ++ it->occur_time;
+            -- removed_edges;
+
+            // at the same time, we should remove this node
+            cur.pop_back();
+            stk.pop();
+        }
+    }
+
+    return false;
+}
+
+std::map<size_t, vector<shingle>>& RCDS_Synchronizer::tree_level_to_shingle_dict(int level) {
+//    static vector<std::map<size_t, vector<shingle>>> cache;
+    // make sure the cache is initialized
+    if (cache.empty())
+        cache = vector<std::map<size_t, vector<shingle>>>(hash_shingle_tree.size());
+
+    auto& res = cache[level];
+//    std::map<size_t, vector<shingle>> res;
+    if (res.empty()) {
+        for (const auto& shingle : hash_shingle_tree[level])
+            res[shingle.first].push_back(shingle);
+
+        for (auto &shingle: res)
+            std::sort(shingle.second.begin(), shingle.second.end());
+    }
+
+//    if (level == 1)
+//        cache.clear();
     return res;
 }
 
